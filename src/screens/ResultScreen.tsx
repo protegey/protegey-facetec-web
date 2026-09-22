@@ -2,11 +2,15 @@ import type { FaceTecVerificationResult } from '../types/facetec';
 
 interface Props {
   result: FaceTecVerificationResult;
+  matchResult?: Record<string, unknown> | null;
+  matchError?: string | null;
   onRestart: () => void;
 }
 
-export function ResultScreen({ result, onRestart }: Props) {
+export function ResultScreen({ result, matchResult, matchError, onRestart }: Props) {
   const { passed, confidenceScore, livenessScore, riskFactors, deviceInfo, sessionId } = result;
+  const matchLevel = matchResult ? Number((matchResult as Record<string, unknown>).matchLevel ?? 0) : undefined;
+  const documentData = matchResult ? (matchResult as Record<string, unknown>).documentData : undefined;
 
   const icon = passed ? '\u2713' : '\u2717';
   const bgClass = passed ? 'bg-emerald-50' : 'bg-red-50';
@@ -16,7 +20,6 @@ export function ResultScreen({ result, onRestart }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-slate-50 flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
-        {/* Result header */}
         <div className="text-center mb-6">
           <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full ${bgClass} border-2 ${borderClass} mb-4 shadow-lg`}>
             <span className={`text-5xl font-bold ${textClass}`}>{icon}</span>
@@ -29,15 +32,48 @@ export function ResultScreen({ result, onRestart }: Props) {
           </p>
         </div>
 
-        {/* Stats grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <StatCard title="Liveness Score" value={`${(livenessScore * 100).toFixed(1)}%`} status={passed} />
           <StatCard title="Confidence" value={`${(confidenceScore * 100).toFixed(1)}%`} status={passed} />
+          {matchLevel !== undefined && (
+            <StatCard title="Match Level" value={`${matchLevel}`} status={matchLevel >= 10} />
+          )}
           <StatCard title="Risk Level" value={riskFactors.rootedDevice || riskFactors.emulator ? 'HIGH' : 'LOW'} status={!riskFactors.rootedDevice && !riskFactors.emulator} />
           <StatCard title="Device" value={deviceInfo?.model ?? 'Unknown'} status />
         </div>
 
-        {/* Risk factors */}
+        {matchResult && documentData && (
+          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+            <h3 className="font-semibold text-slate-800 mb-3">Document Data</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-slate-400">Name:</span>
+                <p className="font-bold">{String((documentData as Record<string, unknown>).fullName ?? '')}</p>
+              </div>
+              <div>
+                <span className="text-slate-400">Document:</span>
+                <p className="font-bold">{String((documentData as Record<string, unknown>).documentNumber ?? '')}</p>
+              </div>
+              <div>
+                <span className="text-slate-400">Type:</span>
+                <p className="font-bold">{String((documentData as Record<string, unknown>).documentType ?? '')}</p>
+              </div>
+              <div>
+                <span className="text-slate-400">Match Status:</span>
+                <p className={`font-bold ${matchLevel !== undefined && matchLevel >= 10 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {matchLevel !== undefined && matchLevel >= 10 ? 'MATCHED' : 'NOT MATCHED'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {matchError && (
+          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+            Match error: {matchError}
+          </div>
+        )}
+
         <div className={`rounded-xl border-2 ${borderClass} p-4 mb-6`}>
           <h3 className="font-semibold text-slate-800 mb-3">Risk Assessment</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -49,7 +85,6 @@ export function ResultScreen({ result, onRestart }: Props) {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex flex-col gap-3">
           <button
             onClick={onRestart}

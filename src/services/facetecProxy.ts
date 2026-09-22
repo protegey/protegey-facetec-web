@@ -69,6 +69,18 @@ export async function search3DDatabase(
   });
 }
 
+export async function match3D2DUploadedIDPhoto(
+  externalDatabaseRefID: string,
+  idScanFrontImage: string,
+  minMatchLevel = 10,
+): Promise<ProxyResponse<Record<string, unknown>>> {
+  return proxyRequest('face-match-3d-2d', {
+    externalDatabaseRefID,
+    idScanFrontImage,
+    minMatchLevel,
+  });
+}
+
 export function getFaceTecDeviceKey(): string {
   return FACE_TEC_DEVICE_KEY;
 }

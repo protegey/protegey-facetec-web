@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { FaceTecVerificationResult, VerificationType } from '../types/facetec';
+import type { FaceTecVerificationResult, VerificationType, IDScanResult } from '../types/facetec';
 import { requestFaceTecProcessing, getSessionResult } from '../services/facetecProxy';
 
 interface UseFaceTecOptions {
@@ -13,38 +13,67 @@ declare global {
       initializeWithSessionRequest: (
         deviceKeyIdentifier: string,
         sessionRequestProcessor: FaceTecSessionRequestProcessor,
-      ) => Promise<boolean>;
-      start3DLiveness: () => Promise<void>;
-      startEnrollment: (externalDatabaseRefID: string) => Promise<void>;
-      processResponse: (responseBlob: string) => Promise<void>;
+        callback: FaceTecInitializeCallback,
+      ) => void;
+      deinitialize: (callback: () => void) => void;
     };
   }
 }
 
+interface FaceTecSessionRequestProcessorCallback {
+  processResponse: (responseBlob: string) => void;
+  updateProgress: (uploadPercent: number) => void;
+  abortOnCatastrophicError: () => void;
+}
+
+interface FaceTecSessionResult {
+  status: number;
+}
+
 interface FaceTecSessionRequestProcessor {
-  onSessionRequest: (sessionRequestBlob: string) => Promise<string>;
-  processResponse: (responseBlob: string) => Promise<void>;
+  onSessionRequest: (requestBlob: string, requestCallback: FaceTecSessionRequestProcessorCallback) => void;
+  onFaceTecExit: (result: FaceTecSessionResult) => void;
+}
+
+interface FaceTecInitializeCallback {
+  onSuccess: (sdkInstance: FaceTecSDKInstance) => void;
+  onError: (error: number) => void;
+}
+
+interface FaceTecSDKInstance {
+  start3DLiveness(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
+  startIDScanOnly(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
+}
+
+interface FaceTecSessionRequestProcessorFull {
+  onSessionRequest: (requestBlob: string, requestCallback: FaceTecSessionRequestProcessorCallback) => void;
+  onFaceTecExit: (result: FaceTecSessionResult) => void;
 }
 
 export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const sdkInstanceRef = useRef<FaceTecSDKInstance | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const processResponseRef = useRef<((responseBlob: string) => Promise<void>) | null>(null);
 
   const processSessionRequest = useCallback(
-    async (sessionRequestBlob: string): Promise<string> => {
+    (requestBlob: string, requestCallback: FaceTecSessionRequestProcessorCallback): void => {
       setLoading(true);
       try {
-        const result = await requestFaceTecProcessing(sessionRequestBlob, verificationType);
-        if (result.success && result.data) {
-          return result.data.responseBlob;
-        }
-        throw new Error(result.error ?? 'FaceTec processing failed');
+        const doProcess = async () => {
+          const result = await requestFaceTecProcessing(requestBlob, verificationType);
+          if (result.success && result.data) {
+            requestCallback.processResponse(result.data.responseBlob);
+          } else {
+            requestCallback.abortOnCatastrophicError();
+          }
+        };
+        doProcess().finally(() => setLoading(false));
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to process FaceTec session';
         onError(msg);
-        throw err;
-      } finally {
+        requestCallback.abortOnCatastrophicError();
         setLoading(false);
       }
     },
@@ -52,56 +81,67 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   );
 
   const processResponse = useCallback(async (responseBlob: string): Promise<void> => {
-    try {
-      if (window.FaceTecSDK) {
-        await window.FaceTecSDK.processResponse(responseBlob);
+    // Response is handled via requestCallback.processResponse() in onSessionRequest
+    // No direct SDK call needed
+  }, []);
+
+  const initializeFaceTec = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!window.FaceTecSDK) {
+        onError('FaceTec SDK not loaded');
+        resolve(false);
+        return;
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to process FaceTec response';
-      onError(msg);
-      throw err;
-    }
-  }, [onError]);
 
-  const initializeFaceTec = useCallback(async (): Promise<boolean> => {
-    if (!window.FaceTecSDK) {
-      onError('FaceTec SDK not loaded');
-      return false;
-    }
-
-    try {
       const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
         onSessionRequest: processSessionRequest,
-        processResponse: processResponse,
+        onFaceTecExit: (result: FaceTecSessionResult) => {
+          onError(`FaceTec session exited with status: ${result.status}`);
+        },
       };
 
-      const success = await window.FaceTecSDK.initializeWithSessionRequest(
-        'dlrL00OosNJyky981KCeSVtVW63vPvtM',
-        sessionRequestProcessor,
-      );
+      const initializeCallback: FaceTecInitializeCallback = {
+        onSuccess: (sdkInstance: FaceTecSDKInstance) => {
+          sdkInstanceRef.current = sdkInstance;
+          setInitialized(true);
+          resolve(true);
+        },
+        onError: (error: number) => {
+          onError(`FaceTec initialization failed with error code: ${error}`);
+          resolve(false);
+        },
+      };
 
-      if (success) {
-        setInitialized(true);
-      } else {
-        onError('FaceTec initialization failed');
-      }
-      return success;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'FaceTec initialization error';
-      onError(msg);
-      return false;
-    }
-  }, [processSessionRequest, processResponse, onError]);
+      window.FaceTecSDK.initializeWithSessionRequest(
+        import.meta.env.VITE_FACE_TEC_DEVICE_KEY ?? 'dlrL00OosNJyky981KCeSVtVW63vPvtM',
+        sessionRequestProcessor,
+        initializeCallback,
+      );
+    });
+  }, [processSessionRequest, onError]);
 
   const startLiveness = useCallback(async (): Promise<FaceTecVerificationResult | null> => {
-    if (!window.FaceTecSDK || !initialized) {
+    const sdkInstance = sdkInstanceRef.current;
+    if (!sdkInstance || !initialized) {
       onError('FaceTec SDK not initialized');
       return null;
     }
 
     setLoading(true);
     try {
-      await window.FaceTecSDK.start3DLiveness();
+      await new Promise<void>((resolve, reject) => {
+        const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
+          onSessionRequest: processSessionRequest,
+          onFaceTecExit: (result: FaceTecSessionResult) => {
+            if (result.status === 0) {
+              resolve();
+            } else {
+              reject(new Error(`Liveness session exited with status: ${result.status}`));
+            }
+          },
+        };
+        sdkInstance.start3DLiveness(sessionRequestProcessor);
+      });
 
       const sessionId = sessionIdRef.current;
       if (sessionId) {
@@ -119,40 +159,54 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     } finally {
       setLoading(false);
     }
-  }, [initialized, onError]);
+  }, [initialized, onError, processSessionRequest]);
 
-  const startEnrollment = useCallback(
-    async (externalDatabaseRefID: string): Promise<FaceTecVerificationResult | null> => {
-      if (!window.FaceTecSDK || !initialized) {
-        onError('FaceTec SDK not initialized');
-        return null;
-      }
+  const startIDScanOnly = useCallback(async (): Promise<IDScanResult | null> => {
+    const sdkInstance = sdkInstanceRef.current;
+    if (!sdkInstance || !initialized) {
+      onError('FaceTec SDK not initialized');
+      return null;
+    }
 
-      setLoading(true);
-      try {
-        await window.FaceTecSDK.startEnrollment(externalDatabaseRefID);
-        sessionIdRef.current = externalDatabaseRefID;
+    setLoading(true);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
+          onSessionRequest: processSessionRequest,
+          onFaceTecExit: (result: FaceTecSessionResult) => {
+            if (result.status === 0) {
+              resolve();
+            } else {
+              reject(new Error(`ID Scan session exited with status: ${result.status}`));
+            }
+          },
+        };
+        sdkInstance.startIDScanOnly(sessionRequestProcessor);
+      });
 
-        const result = await getSessionResult(externalDatabaseRefID);
+      const sessionId = sessionIdRef.current;
+      if (sessionId) {
+        const result = await getSessionResult(sessionId);
         if (result.success && result.data) {
           const raw = result.data as Record<string, unknown>;
-          return buildVerificationResult(externalDatabaseRefID, raw, 'enrollment');
+          return buildIDScanResult(sessionId, raw);
         }
-        return null;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Enrollment failed';
-        onError(msg);
-        return null;
-      } finally {
-        setLoading(false);
       }
-    },
-    [initialized, onError],
-  );
+      return null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'ID Scan failed';
+      onError(msg);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [initialized, onError, processSessionRequest]);
 
   useEffect(() => {
     return () => {
-      // Cleanup
+      if (window.FaceTecSDK) {
+        window.FaceTecSDK.deinitialize(() => {});
+      }
     };
   }, []);
 
@@ -161,8 +215,29 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     initialized,
     initializeFaceTec,
     startLiveness,
-    startEnrollment,
+    startIDScanOnly,
     sessionIdRef,
+    sdkInstanceRef,
+  };
+}
+
+function buildIDScanResult(sessionId: string, raw: Record<string, unknown>): IDScanResult {
+  const documentData = (raw.documentData as Record<string, unknown>) ?? {};
+  return {
+    success: raw.success ?? false,
+    documentData: {
+      fullName: String(documentData.fullName ?? documentData.name ?? ''),
+      documentNumber: String(documentData.documentNumber ?? documentData.idNumber ?? ''),
+      documentType: String(documentData.documentType ?? ''),
+      dateOfBirth: String(documentData.dateOfBirth ?? ''),
+      expirationDate: String(documentData.expirationDate ?? ''),
+      nationality: String(documentData.nationality ?? ''),
+      issuingState: String(documentData.issuingState ?? ''),
+      photo: String(documentData.photo ?? documentData.idPhoto ?? ''),
+    },
+    photoIDNextStepEnumInt: Number(raw.photoIDNextStepEnumInt ?? 0),
+    sessionId,
+    externalDatabaseRefID: String(raw.externalDatabaseRefID ?? ''),
   };
 }
 

@@ -33,11 +33,11 @@ export function WelcomeScreen({ onStart, onContinueWithDidit }: Props) {
             >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-xl">
-                  &#x1F3DB;
+                  &#x1F4CF;
                 </div>
                 <div>
-                  <p className="font-semibold text-slate-800">Biometric Face Scan</p>
-                  <p className="text-sm text-slate-500">3D Liveness Check — FaceTec</p>
+                  <p className="font-semibold text-slate-800">Scan Document</p>
+                  <p className="text-sm text-slate-500">CNI ou Passport — FaceTec ID Scan</p>
                 </div>
               </div>
             </button>
@@ -70,13 +70,13 @@ export function WelcomeScreen({ onStart, onContinueWithDidit }: Props) {
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-bold mt-0.5">
                   1
                 </div>
-                <p className="text-sm text-slate-600">Look at the screen and follow the prompts</p>
+                <p className="text-sm text-slate-600">Scan your document (CNI ou Passport)</p>
               </div>
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-bold mt-0.5">
                   2
                 </div>
-                <p className="text-sm text-slate-600">Complete the liveness challenge</p>
+                <p className="text-sm text-slate-600">Complete the 3D face scan</p>
               </div>
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm font-bold mt-0.5">

@@ -63,9 +63,29 @@ export interface FaceTecVerificationResult {
 
 // ── Verification types ─────────────────────────────────────────────────
 
-export type VerificationStep = 'welcome' | 'liveness' | 'enrollment' | 'result';
+export type VerificationStep = 'welcome' | 'document-type-select' | 'id-scan' | 'liveness' | 'result';
+
+export type DocumentType = 'cni' | 'passport';
 
 export type VerificationType = 'liveness' | 'enrollment' | 're-verification' | 'match';
+
+export interface IDScanResult {
+  success: boolean;
+  documentData: {
+    fullName: string;
+    documentNumber: string;
+    documentType: string;
+    dateOfBirth?: string;
+    expirationDate?: string;
+    nationality?: string;
+    issuingState?: string;
+    photo?: string;
+    [key: string]: unknown;
+  };
+  photoIDNextStepEnumInt: number;
+  sessionId: string;
+  externalDatabaseRefID?: string;
+}
 
 export interface KycEnrollment {
   id: string;
