@@ -9,8 +9,8 @@ interface Props {
 
 export function ResultScreen({ result, matchResult, matchError, onRestart }: Props) {
   const { passed, confidenceScore, livenessScore, riskFactors, deviceInfo, sessionId } = result;
-  const matchLevel = matchResult ? Number((matchResult as Record<string, unknown>).matchLevel ?? 0) : undefined;
-  const documentData = matchResult ? (matchResult as Record<string, unknown>).documentData : undefined;
+  const matchLevel = matchResult ? Number(matchResult.matchLevel ?? 0) : undefined;
+  const docData = matchResult && matchResult.documentData ? (matchResult.documentData as Record<string, unknown>) : null;
 
   const icon = passed ? '\u2713' : '\u2717';
   const bgClass = passed ? 'bg-emerald-50' : 'bg-red-50';
@@ -42,21 +42,21 @@ export function ResultScreen({ result, matchResult, matchError, onRestart }: Pro
           <StatCard title="Device" value={deviceInfo?.model ?? 'Unknown'} status />
         </div>
 
-        {matchResult && documentData && (
+        {matchResult && docData && (
           <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
             <h3 className="font-semibold text-slate-800 mb-3">Document Data</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="text-slate-400">Name:</span>
-                <p className="font-bold">{String((documentData as Record<string, unknown>).fullName ?? '')}</p>
+                <p className="font-bold">{String(docData.fullName ?? '')}</p>
               </div>
               <div>
                 <span className="text-slate-400">Document:</span>
-                <p className="font-bold">{String((documentData as Record<string, unknown>).documentNumber ?? '')}</p>
+                <p className="font-bold">{String(docData.documentNumber ?? '')}</p>
               </div>
               <div>
                 <span className="text-slate-400">Type:</span>
-                <p className="font-bold">{String((documentData as Record<string, unknown>).documentType ?? '')}</p>
+                <p className="font-bold">{String(docData.documentType ?? '')}</p>
               </div>
               <div>
                 <span className="text-slate-400">Match Status:</span>

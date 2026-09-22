@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
-import type { FaceTecVerificationResult, IDScanResult } from '../types/facetec';
+import type { IDScanResult } from '../types/facetec';
 import { FaceTecOverlay } from '../components/FaceTecOverlay';
 
 interface Props {

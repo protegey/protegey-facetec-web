@@ -43,11 +43,7 @@ interface FaceTecInitializeCallback {
 interface FaceTecSDKInstance {
   start3DLiveness(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
   startIDScanOnly(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
-}
-
-interface FaceTecSessionRequestProcessorFull {
-  onSessionRequest: (requestBlob: string, requestCallback: FaceTecSessionRequestProcessorCallback) => void;
-  onFaceTecExit: (result: FaceTecSessionResult) => void;
+  startEnrollment?(externalDatabaseRefID: string): void;
 }
 
 export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
@@ -55,7 +51,6 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   const [initialized, setInitialized] = useState(false);
   const sdkInstanceRef = useRef<FaceTecSDKInstance | null>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const processResponseRef = useRef<((responseBlob: string) => Promise<void>) | null>(null);
 
   const processSessionRequest = useCallback(
     (requestBlob: string, requestCallback: FaceTecSessionRequestProcessorCallback): void => {
@@ -79,11 +74,6 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     },
     [verificationType, onError],
   );
-
-  const processResponse = useCallback(async (responseBlob: string): Promise<void> => {
-    // Response is handled via requestCallback.processResponse() in onSessionRequest
-    // No direct SDK call needed
-  }, []);
 
   const initializeFaceTec = useCallback((): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -202,6 +192,14 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     }
   }, [initialized, onError, processSessionRequest]);
 
+  const startEnrollment = useCallback(async (externalDatabaseRefID: string): Promise<FaceTecVerificationResult | null> => {
+    const result = await startLiveness();
+    if (result) {
+      return { ...result, externalDatabaseRefID };
+    }
+    return null;
+  }, [startLiveness]);
+
   useEffect(() => {
     return () => {
       if (window.FaceTecSDK) {
@@ -215,6 +213,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     initialized,
     initializeFaceTec,
     startLiveness,
+    startEnrollment,
     startIDScanOnly,
     sessionIdRef,
     sdkInstanceRef,
@@ -224,7 +223,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
 function buildIDScanResult(sessionId: string, raw: Record<string, unknown>): IDScanResult {
   const documentData = (raw.documentData as Record<string, unknown>) ?? {};
   return {
-    success: raw.success ?? false,
+    success: raw.success as boolean ?? false,
     documentData: {
       fullName: String(documentData.fullName ?? documentData.name ?? ''),
       documentNumber: String(documentData.documentNumber ?? documentData.idNumber ?? ''),

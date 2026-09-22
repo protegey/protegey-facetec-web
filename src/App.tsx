@@ -16,7 +16,7 @@ export function App() {
   const [matchResult, setMatchResult] = useState<Record<string, unknown> | null>(null)
   const [matchError, setMatchError] = useState<string | null>(null)
 
-  const handleDocumentTypeSelect = (type: string) => {
+  const handleDocumentTypeSelect = (_type: string) => {
     setIDScanResult(null);
     setScreen('id-scan');
   };
