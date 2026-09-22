@@ -44,6 +44,7 @@ export interface FaceTecVerificationResult {
   confidenceScore: number;
   livenessScore: number;
   matchScore?: number;
+  externalDatabaseRefID?: string;
   riskFactors: {
     livenessProbability: number;
     matchLevel: number;
