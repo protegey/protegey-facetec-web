@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
 import type { IDScanResult } from '../types/facetec';
 import { FaceTecOverlay } from '../components/FaceTecOverlay';
+import { PageShell } from '../components/PageShell';
+import { StepIndicator } from '../components/StepIndicator';
+import { ScanFrame } from '../components/ScanFrame';
+import { logSdkEvent } from '../services/sdkEventLog';
 
 interface Props {
   onIDScanComplete: (result: IDScanResult) => void;
@@ -20,6 +24,7 @@ export function IDScanScreen({ onIDScanComplete, onBack, onError }: Props) {
   });
 
   const handleStartIDScan = async () => {
+    if (error) logSdkEvent('FV_RETRY', 'Nouvelle tentative de scan du document');
     setShowOverlay(true);
     setProcessing(true);
     setError(null);
@@ -27,17 +32,18 @@ export function IDScanScreen({ onIDScanComplete, onBack, onError }: Props) {
     try {
       const initialized = await initializeFaceTec();
       if (!initialized) {
-        setError('Failed to initialize FaceTec');
+        setError('Échec de l’initialisation du SDK');
         setShowOverlay(false);
         setProcessing(false);
         return;
       }
       const result = await startIDScanOnly();
       if (result) {
+        logSdkEvent('CAPTURE_DONE', 'Scan du document terminé');
         onIDScanComplete(result);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'ID Scan failed');
+      setError(err instanceof Error ? err.message : 'Échec du scan du document');
       setShowOverlay(false);
     } finally {
       setProcessing(false);
@@ -45,79 +51,48 @@ export function IDScanScreen({ onIDScanComplete, onBack, onError }: Props) {
     }
   };
 
-  const handleCloseOverlay = () => {
-    setShowOverlay(false);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-slate-50 flex items-center justify-center p-4">
-      <div className="max-w-lg w-full">
-        <div className="mb-6">
-          <button
-            onClick={onBack}
-            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium mb-3 cursor-pointer"
-          >
-            &larr; Back
-          </button>
-          <h1 className="text-2xl font-bold text-slate-900">Scan du document</h1>
-          <p className="text-slate-500 mt-1">
-            Placez votre document devant la caméra pour le scanner
-          </p>
-        </div>
+    <PageShell
+      onBack={onBack}
+      title="Scannez votre document"
+      description="Placez le document bien à plat, dans le cadre, sous un bon éclairage."
+      rail={<StepIndicator steps={[{ label: 'Document' }, { label: 'Visage' }, { label: 'Résultat' }]} currentStep={1} />}
+    >
+      <ScanFrame active={processing} tone={error ? 'danger' : 'accent'}>
+        <span className="text-3xl" aria-hidden="true">
+          &#128196;
+        </span>
+      </ScanFrame>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-center mb-6">
-            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
-              <span className="text-5xl">&#128221;</span>
-            </div>
-          </div>
-
-          <div className="text-center mb-6 space-y-2">
-            <h3 className="text-lg font-semibold text-slate-800">
-              Capture du document
-            </h3>
-            <p className="text-sm text-slate-500">
-              Le système va lire automatiquement les informations de votre document (OCR)
-            </p>
-            <div className="flex items-center justify-center gap-4 mt-4 text-xs text-slate-400">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Lecture automatique
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Données sécurisées
-              </span>
-            </div>
-          </div>
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-
-          <button
-            onClick={handleStartIDScan}
-            disabled={loading || processing}
-            className="w-full py-4 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors text-lg cursor-pointer"
-          >
-            {loading || processing ? 'Scan en cours...' : 'Scanner le document'}
-          </button>
-        </div>
+      <div className="mt-6 flex justify-center gap-4 font-mono text-[11px] text-muted">
+        <span>Lecture OCR automatique</span>
+        <span aria-hidden="true">·</span>
+        <span>Données chiffrées</span>
       </div>
 
+      {error && (
+        <div className="mt-4 rounded-lg border border-danger/30 bg-danger-dim px-3 py-2.5 text-sm text-danger">{error}</div>
+      )}
+
+      <button
+        onClick={handleStartIDScan}
+        disabled={loading || processing}
+        className="mt-6 w-full cursor-pointer rounded-xl bg-accent py-3.5 font-display font-semibold text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {loading || processing ? 'Scan en cours…' : error ? 'Réessayer' : 'Démarrer le scan'}
+      </button>
+
       {showOverlay && (
-        <FaceTecOverlay active={showOverlay} onClose={handleCloseOverlay}>
-          <div className="flex-1 flex items-center justify-center p-4">
+        <FaceTecOverlay active={showOverlay} onClose={() => setShowOverlay(false)}>
+          <div className="flex flex-1 items-center justify-center p-4">
             <div className="text-center">
-              <div className="w-16 h-16 rounded-full border-4 border-amber-500 border-t-transparent animate-spin mx-auto mb-4" />
-              <p className="text-white text-lg font-semibold">Scan du document...</p>
-              <p className="text-white/60 text-sm mt-1">Placez votre document dans le cadre</p>
+              <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-2 border-border border-t-accent" />
+              <p className="font-display font-semibold text-ink">Scan du document…</p>
+              <p className="mt-1 text-sm text-muted">Maintenez le document dans le cadre</p>
             </div>
           </div>
         </FaceTecOverlay>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -1,3 +1,4 @@
+import { ScanFrame } from '../components/ScanFrame';
 import type { FaceTecVerificationResult } from '../types/facetec';
 
 interface Props {
@@ -16,116 +17,99 @@ interface Props {
   onReturnToPartner?: () => void;
 }
 
+function pct(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
 export function ResultScreen({ result, matchResult, matchError, onRestart, submitting, submitError, returnUrl, onReturnToPartner }: Props) {
   const { passed, confidenceScore, livenessScore, riskFactors, deviceInfo, sessionId } = result;
   const matchLevel = matchResult ? Number(matchResult.matchLevel ?? 0) : undefined;
   const docData = matchResult && matchResult.documentData ? (matchResult.documentData as Record<string, unknown>) : null;
-
-  const icon = passed ? '\u2713' : '\u2717';
-  const bgClass = passed ? 'bg-emerald-50' : 'bg-red-50';
-  const borderClass = passed ? 'border-emerald-200' : 'border-red-200';
-  const textClass = passed ? 'text-emerald-700' : 'text-red-700';
+  const tone = passed ? 'success' : 'danger';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-slate-50 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="text-center mb-6">
-          <div className={`inline-flex items-center justify-center w-24 h-24 rounded-full ${bgClass} border-2 ${borderClass} mb-4 shadow-lg`}>
-            <span className={`text-5xl font-bold ${textClass}`}>{icon}</span>
-          </div>
-          <h1 className={`text-3xl font-bold ${textClass}`}>
-            {passed ? 'Verification Passed' : 'Verification Failed'}
+    <div className="relative flex min-h-screen items-center justify-center bg-bg px-4 py-10">
+      <div
+        className={`pointer-events-none absolute left-1/2 top-0 h-[420px] w-[420px] -translate-x-1/2 rounded-full blur-[120px] ${
+          passed ? 'bg-success/10' : 'bg-danger/10'
+        }`}
+        aria-hidden="true"
+      />
+      <div className="relative w-full max-w-sm">
+        <div className="mb-6 text-center">
+          <ScanFrame active={false} tone={tone}>
+            <span className={`text-4xl ${passed ? 'text-success' : 'text-danger'}`} aria-hidden="true">
+              {passed ? '✓' : '✕'}
+            </span>
+          </ScanFrame>
+          <h1 className="mt-5 font-display text-2xl font-bold text-ink">
+            {passed ? 'Identité vérifiée' : 'Vérification échouée'}
           </h1>
-          <p className="text-slate-500 mt-2">
-            Session ID: {sessionId}
-          </p>
+          <p className="mt-1.5 font-mono text-xs text-muted">{sessionId}</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <StatCard title="Liveness Score" value={`${(livenessScore * 100).toFixed(1)}%`} status={passed} />
-          <StatCard title="Confidence" value={`${(confidenceScore * 100).toFixed(1)}%`} status={passed} />
-          {matchLevel !== undefined && (
-            <StatCard title="Match Level" value={`${matchLevel}`} status={matchLevel >= 10} />
-          )}
-          <StatCard title="Risk Level" value={riskFactors.rootedDevice || riskFactors.emulator ? 'HIGH' : 'LOW'} status={!riskFactors.rootedDevice && !riskFactors.emulator} />
-          <StatCard title="Device" value={deviceInfo?.model ?? 'Unknown'} status />
+        <div className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-warn/30 bg-warn-dim px-3 py-2 text-xs text-warn">
+          Mode test FaceTec — résultats issus de l'API de test, en attendant l'accès au Server SDK de production
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
+          <p className="mb-3 font-display text-sm font-semibold text-ink">Scores</p>
+          <ScoreRow label="Vivacité" value={livenessScore} />
+          <ScoreRow label="Confiance" value={confidenceScore} />
+          {matchLevel !== undefined && <ScoreRow label="Correspondance" value={Math.min(1, matchLevel / 100)} raw={`${matchLevel}`} />}
+
+          <div className="my-4 h-px bg-border" />
+
+          <p className="mb-3 font-display text-sm font-semibold text-ink">Facteurs de risque</p>
+          <RiskRow label="Appareil rooté" bad={riskFactors.rootedDevice} />
+          <RiskRow label="Émulateur détecté" bad={riskFactors.emulator} />
+          <RiskRow label="Tentatives de spoofing" bad={riskFactors.spoofAttempts > 0} value={String(riskFactors.spoofAttempts)} />
+          {deviceInfo?.model && <RiskRow label="Appareil" bad={false} value={deviceInfo.model} />}
         </div>
 
         {matchResult && docData && (
-          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-            <h3 className="font-semibold text-slate-800 mb-3">Document Data</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-slate-400">Name:</span>
-                <p className="font-bold">{String(docData.fullName ?? '')}</p>
+          <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
+            <p className="mb-3 font-display text-sm font-semibold text-ink">Document</p>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-muted">Nom</span>
+                <span className="truncate text-ink">{String(docData.fullName ?? '—')}</span>
               </div>
-              <div>
-                <span className="text-slate-400">Document:</span>
-                <p className="font-bold">{String(docData.documentNumber ?? '')}</p>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted">Numéro</span>
+                <span className="truncate font-mono text-ink">{String(docData.documentNumber ?? '—')}</span>
               </div>
-              <div>
-                <span className="text-slate-400">Type:</span>
-                <p className="font-bold">{String(docData.documentType ?? '')}</p>
-              </div>
-              <div>
-                <span className="text-slate-400">Match Status:</span>
-                <p className={`font-bold ${matchLevel !== undefined && matchLevel >= 10 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {matchLevel !== undefined && matchLevel >= 10 ? 'MATCHED' : 'NOT MATCHED'}
-                </p>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted">Type</span>
+                <span className="text-ink">{String(docData.documentType ?? '—')}</span>
               </div>
             </div>
           </div>
         )}
 
-        {matchError && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-            Match error: {matchError}
-          </div>
-        )}
+        {matchError && <StatusBanner tone="danger">Correspondance document : {matchError}</StatusBanner>}
+        {submitting && <StatusBanner tone="accent">Enregistrement du résultat…</StatusBanner>}
+        {submitError && <StatusBanner tone="danger">Le résultat n'a pas pu être enregistré ({submitError}). Réessayez ou contactez le support.</StatusBanner>}
+        {!submitting && !submitError && returnUrl && <StatusBanner tone="success">Résultat enregistré avec succès.</StatusBanner>}
 
-        {submitting && (
-          <div className="mb-6 p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700 text-sm">
-            Enregistrement du résultat en cours…
-          </div>
-        )}
-
-        {submitError && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-            Le résultat n’a pas pu être enregistré ({submitError}). Réessayez ou contactez le support si le problème persiste.
-          </div>
-        )}
-
-        {!submitting && !submitError && returnUrl && (
-          <div className="mb-6 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm">
-            Résultat enregistré avec succès.
-          </div>
-        )}
-
-        <div className={`rounded-xl border-2 ${borderClass} p-4 mb-6`}>
-          <h3 className="font-semibold text-slate-800 mb-3">Risk Assessment</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <RiskItem label="Liveness Probability" value={`${(riskFactors.livenessProbability * 100).toFixed(1)}%`} ok={riskFactors.livenessProbability >= 0.85} />
-            <RiskItem label="Match Level" value={`${riskFactors.matchLevel}`} ok={riskFactors.matchLevel >= 10} />
-            <RiskItem label="Rooted Device" value={riskFactors.rootedDevice ? 'Yes' : 'No'} ok={!riskFactors.rootedDevice} />
-            <RiskItem label="Emulator" value={riskFactors.emulator ? 'Yes' : 'No'} ok={!riskFactors.emulator} />
-            <RiskItem label="Spoof Attempts" value={String(riskFactors.spoofAttempts)} ok={riskFactors.spoofAttempts === 0} />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3">
+        <div className="mt-6 flex flex-col gap-2.5">
           {returnUrl && onReturnToPartner && (
             <button
               onClick={onReturnToPartner}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors cursor-pointer"
+              className="w-full cursor-pointer rounded-xl bg-accent py-3.5 font-display font-semibold text-bg transition-opacity hover:opacity-90"
             >
               Retour au portail
             </button>
           )}
           <button
             onClick={onRestart}
-            className={returnUrl ? 'w-full py-3 bg-white border-2 border-slate-200 hover:border-slate-400 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer' : 'w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors cursor-pointer'}
+            className={`w-full cursor-pointer rounded-xl py-3.5 font-display font-semibold transition-colors ${
+              returnUrl
+                ? 'border border-border bg-surface text-ink hover:border-muted'
+                : 'bg-accent text-bg hover:opacity-90'
+            }`}
           >
-            Verify Another Person
+            Recommencer
           </button>
         </div>
       </div>
@@ -133,24 +117,32 @@ export function ResultScreen({ result, matchResult, matchError, onRestart, submi
   );
 }
 
-function StatCard({ title, value, status }: { title: string; value: string; status: boolean }) {
+function ScoreRow({ label, value, raw }: { label: string; value: number; raw?: string }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-4">
-      <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">{title}</p>
-      <p className={`text-2xl font-bold mt-1 ${status ? 'text-emerald-600' : 'text-red-600'}`}>
-        {value}
-      </p>
+    <div className="mb-2.5 flex items-center gap-3 text-sm last:mb-0">
+      <span className="w-28 flex-shrink-0 text-muted">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
+        <div className="h-full rounded-full bg-accent" style={{ width: pct(value) }} />
+      </div>
+      <span className="w-12 flex-shrink-0 text-right font-mono text-ink">{raw ?? pct(value)}</span>
     </div>
   );
 }
 
-function RiskItem({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+function RiskRow({ label, bad, value }: { label: string; bad: boolean; value?: string }) {
   return (
-    <div className="flex justify-between items-center">
-      <span className="text-slate-500">{label}</span>
-      <span className={`font-bold text-sm ${ok ? 'text-emerald-600' : 'text-red-600'}`}>
-        {value}
-      </span>
+    <div className="mb-2 flex items-center justify-between text-sm last:mb-0">
+      <span className="text-muted">{label}</span>
+      <span className={`font-mono ${bad ? 'text-danger' : 'text-ink'}`}>{value ?? (bad ? 'Oui' : 'Non')}</span>
     </div>
   );
+}
+
+function StatusBanner({ tone, children }: { tone: 'accent' | 'success' | 'danger'; children: React.ReactNode }) {
+  const toneClass = {
+    accent: 'border-accent/30 bg-accent-dim text-accent',
+    success: 'border-success/30 bg-success-dim text-success',
+    danger: 'border-danger/30 bg-danger-dim text-danger',
+  }[tone];
+  return <div className={`mt-4 rounded-lg border px-3 py-2.5 text-sm ${toneClass}`}>{children}</div>;
 }

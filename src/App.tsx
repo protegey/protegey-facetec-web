@@ -5,6 +5,7 @@ import { IDScanScreen } from './screens/IDScanScreen'
 import { LivenessScreen } from './screens/LivenessScreen'
 import { ResultScreen } from './screens/ResultScreen'
 import { FaceTecSDKLoader } from './components/FaceTecSDKLoader'
+import { EventLogPanel } from './components/EventLogPanel'
 import { match3D2DUploadedIDPhoto, setApiBase } from './services/facetecProxy'
 import { notifyParentComplete } from './services/embedBridge'
 import { buildFaceTecResultPayload, submitFaceTecResult } from './services/backendSubmission'
@@ -124,7 +125,8 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-bg">
+      <EventLogPanel />
       {!sdkLoaded && screen === 'welcome' && (
         <FaceTecSDKLoader onSDKLoaded={() => setSdkLoaded(true)} onError={handleError} />
       )}
