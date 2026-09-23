@@ -5,9 +5,18 @@ interface Props {
   matchResult?: Record<string, unknown> | null;
   matchError?: string | null;
   onRestart: () => void;
+  /** Whether the result is still being posted to protegey-backend. */
+  submitting?: boolean;
+  /** Set when the direct API submission to the backend failed — the capture itself still
+   * succeeded, but nothing was persisted, so this must be visible, not silently swallowed. */
+  submitError?: string | null;
+  /** Present when launched by protegey-partner-web with a `returnUrl` — where to send the user
+   * back once they're done here. */
+  returnUrl?: string | null;
+  onReturnToPartner?: () => void;
 }
 
-export function ResultScreen({ result, matchResult, matchError, onRestart }: Props) {
+export function ResultScreen({ result, matchResult, matchError, onRestart, submitting, submitError, returnUrl, onReturnToPartner }: Props) {
   const { passed, confidenceScore, livenessScore, riskFactors, deviceInfo, sessionId } = result;
   const matchLevel = matchResult ? Number(matchResult.matchLevel ?? 0) : undefined;
   const docData = matchResult && matchResult.documentData ? (matchResult.documentData as Record<string, unknown>) : null;
@@ -74,6 +83,24 @@ export function ResultScreen({ result, matchResult, matchError, onRestart }: Pro
           </div>
         )}
 
+        {submitting && (
+          <div className="mb-6 p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700 text-sm">
+            Enregistrement du résultat en cours…
+          </div>
+        )}
+
+        {submitError && (
+          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+            Le résultat n’a pas pu être enregistré ({submitError}). Réessayez ou contactez le support si le problème persiste.
+          </div>
+        )}
+
+        {!submitting && !submitError && returnUrl && (
+          <div className="mb-6 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm">
+            Résultat enregistré avec succès.
+          </div>
+        )}
+
         <div className={`rounded-xl border-2 ${borderClass} p-4 mb-6`}>
           <h3 className="font-semibold text-slate-800 mb-3">Risk Assessment</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -86,17 +113,19 @@ export function ResultScreen({ result, matchResult, matchError, onRestart }: Pro
         </div>
 
         <div className="flex flex-col gap-3">
+          {returnUrl && onReturnToPartner && (
+            <button
+              onClick={onReturnToPartner}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors cursor-pointer"
+            >
+              Retour au portail
+            </button>
+          )}
           <button
             onClick={onRestart}
-            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors cursor-pointer"
+            className={returnUrl ? 'w-full py-3 bg-white border-2 border-slate-200 hover:border-slate-400 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer' : 'w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors cursor-pointer'}
           >
             Verify Another Person
-          </button>
-          <button
-            onClick={() => window.location.href = '/dashboard'}
-            className="w-full py-3 bg-white border-2 border-slate-200 hover:border-slate-400 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
-          >
-            Go to Dashboard
           </button>
         </div>
       </div>

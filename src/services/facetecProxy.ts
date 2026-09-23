@@ -1,5 +1,15 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
+let API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
 const FACE_TEC_DEVICE_KEY = import.meta.env.VITE_FACE_TEC_DEVICE_KEY ?? 'dlrL00OosNJyky981KCeSVtVW63vPvtM';
+
+/**
+ * Overrides the API base used for the (unauthenticated) FaceTec Testing-API
+ * proxy calls below. Used when this app is launched embedded with an
+ * `apiBase` query param, in case the embedding environment's API differs
+ * from this app's own `VITE_API_BASE` build-time default.
+ */
+export function setApiBase(base: string): void {
+  API_BASE = base;
+}
 
 interface ProxyResponse<T> {
   success: boolean;

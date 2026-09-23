@@ -59,6 +59,9 @@ export interface FaceTecVerificationResult {
   };
   ageEstimate?: number;
   auditTrailUrl?: string;
+  /** Base64 selfie/face capture image from the liveness check's audit trail — same convention as
+   * `IDScanResult.documentData.photo` (raw base64, no `data:` prefix). */
+  selfiePhoto?: string;
   rawResponse: Record<string, unknown>;
 }
 

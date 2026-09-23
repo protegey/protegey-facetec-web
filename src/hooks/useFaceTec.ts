@@ -272,7 +272,12 @@ function buildVerificationResult(
       platform: String(device.platform ?? 'web'),
     } : undefined,
     ageEstimate: raw.ageEstimateGroup ? Number(raw.ageEstimateGroup) : undefined,
-    auditTrailUrl: raw.auditTrailImage ? URL.createObjectURL(new Blob([])) : undefined,
+    // The actual base64 selfie image — previously this built an object URL from an EMPTY blob
+    // (a bug: the real image data was discarded and the URL was invalid off-page anyway, since a
+    // blob: URL can't be sent to the backend). `selfiePhoto` carries the real base64 string; keep
+    // `auditTrailUrl` only as a data: URL, usable for an on-screen <img> if ever needed.
+    selfiePhoto: typeof raw.auditTrailImage === 'string' ? raw.auditTrailImage : undefined,
+    auditTrailUrl: typeof raw.auditTrailImage === 'string' ? `data:image/jpeg;base64,${raw.auditTrailImage}` : undefined,
     rawResponse: raw,
   };
 }
