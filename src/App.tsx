@@ -105,7 +105,19 @@ export function App() {
   };
 
   const handleReturnToPartner = () => {
-    if (returnUrl) window.location.href = returnUrl;
+    if (!returnUrl) return;
+    // protegey-partner-web now opens this app in a NEW TAB via window.open (never a same-tab
+    // redirect, so the partner portal stays open and usable during capture) — that original tab
+    // is still sitting on `returnUrl` already, so the right move here is to close THIS tab and
+    // let the user land back on it, not navigate this one to `returnUrl` too (which would leave
+    // two Protegey tabs open, one stale). `window.close()` only works on a window that was
+    // actually opened by script, which is exactly the `window.opener`-having case here — anyone
+    // who reached this page by pasting the link directly (no opener) falls back to navigating.
+    if (window.opener) {
+      window.close();
+    } else {
+      window.location.href = returnUrl;
+    }
   };
 
   const handleError = (_error: string) => {
