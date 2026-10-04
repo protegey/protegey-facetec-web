@@ -54,5 +54,38 @@ export function applyProtegeyFaceTecTheme(): void {
   customization.ovalCustomization.progressColor1 = TEAL;
   customization.ovalCustomization.progressColor2 = SURFACE;
 
+  // ID Scan has its OWN separate customization namespace — none of the above touches the
+  // document-type selection, capture ("Scan Front of ID"), review ("Confirm Photo is Sharp &
+  // Legible" + Retry/Accept), or feedback screens. All of those live here instead.
+  const idScan = customization.idScanCustomization;
+  idScan.selectionScreenBackgroundColors = NAVY;
+  idScan.selectionScreenForegroundColor = INK;
+
+  idScan.captureScreenBackgroundColor = NAVY;
+  idScan.captureScreenForegroundColor = INK;
+  idScan.captureScreenTextBackgroundColor = 'rgba(16, 29, 84, 0.9)';
+  idScan.captureFrameStrokeColor = TEAL;
+
+  idScan.reviewScreenBackgroundColors = NAVY;
+  idScan.reviewScreenForegroundColor = INK;
+  idScan.reviewScreenTextBackgroundColor = 'rgba(16, 29, 84, 0.9)';
+
+  idScan.idFeedbackScreenBackgroundColors = NAVY;
+  idScan.idFeedbackScreenForegroundColor = INK;
+
+  idScan.additionalReviewScreenBackgroundColors = NAVY;
+  idScan.additionalReviewScreenForegroundColor = INK;
+  idScan.additionalReviewTagImageColor = TEAL;
+  idScan.additionalReviewTagTextColor = INK;
+
+  // Retry / Accept buttons on the Review screen, and the buttons on every other ID Scan screen.
+  idScan.buttonBackgroundNormalColor = TEAL;
+  idScan.buttonBackgroundHighlightColor = '#11b89c';
+  idScan.buttonBackgroundDisabledColor = MUTED;
+  idScan.buttonTextNormalColor = '#06231d';
+  idScan.buttonTextHighlightColor = '#06231d';
+  idScan.buttonTextDisabledColor = '#06231d';
+  idScan.buttonBorderColor = 'transparent';
+
   sdk.setCustomization(customization);
 }
