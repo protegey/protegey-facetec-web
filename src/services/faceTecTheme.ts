@@ -18,8 +18,9 @@ export function applyProtegeyFaceTecTheme(): void {
 
   const customization = new sdk.FaceTecCustomization();
 
-  // The live camera frame — border + area around the oval/guide shape.
-  customization.frameCustomization.borderColor = TEAL;
+  // The live camera frame — area around the oval/guide shape. No border: it read as an unnecessary
+  // extra outline around both the camera box and the button bar beneath it.
+  customization.frameCustomization.borderColor = 'transparent';
   customization.frameCustomization.backgroundColor = NAVY;
 
   // The overlay behind the frame (visible letterboxing on wide screens).
@@ -64,7 +65,7 @@ export function applyProtegeyFaceTecTheme(): void {
   idScan.captureScreenBackgroundColor = NAVY;
   idScan.captureScreenForegroundColor = INK;
   idScan.captureScreenTextBackgroundColor = 'rgba(16, 29, 84, 0.9)';
-  idScan.captureFrameStrokeColor = TEAL;
+  idScan.captureFrameStrokeColor = 'transparent';
 
   idScan.reviewScreenBackgroundColors = NAVY;
   idScan.reviewScreenForegroundColor = INK;
