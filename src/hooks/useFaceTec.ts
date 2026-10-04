@@ -10,6 +10,8 @@ interface UseFaceTecOptions {
 declare global {
   interface Window {
     FaceTecSDK?: {
+      setResourceDirectory: (resourceDirectory: string) => void;
+      setImagesDirectory: (imagesDirectory: string) => void;
       initializeWithSessionRequest: (
         deviceKeyIdentifier: string,
         sessionRequestProcessor: FaceTecSessionRequestProcessor,
@@ -101,6 +103,13 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
           resolve(false);
         },
       };
+
+      // Required before initialization — without these the SDK can't locate its own .wasm/.data
+      // resource bundles or OCR/UI images and every request for them 404s. Paths are absolute
+      // from the site root since main.js is served from /core-sdk/main.js and the resource
+      // folders sit right next to it at public/core-sdk/resources and public/core-sdk/FaceTec_images.
+      window.FaceTecSDK.setResourceDirectory('/core-sdk/resources');
+      window.FaceTecSDK.setImagesDirectory('/core-sdk/FaceTec_images');
 
       window.FaceTecSDK.initializeWithSessionRequest(
         import.meta.env.VITE_FACE_TEC_DEVICE_KEY ?? 'dlrL00OosNJyky981KCeSVtVW63vPvtM',
