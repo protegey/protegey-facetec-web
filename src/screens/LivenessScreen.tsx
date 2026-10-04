@@ -5,6 +5,7 @@ import { FaceTecOverlay } from '../components/FaceTecOverlay';
 import { PageShell } from '../components/PageShell';
 import { StepIndicator } from '../components/StepIndicator';
 import { ScanFrame } from '../components/ScanFrame';
+import { FaceScanIcon } from '../components/DocumentIcons';
 import { logSdkEvent } from '../services/sdkEventLog';
 
 interface Props {
@@ -58,10 +59,8 @@ export function LivenessScreen({ onComplete, onBack, onError }: Props) {
       description="Un scan 3D vérifie qu'une personne réelle se trouve devant la caméra — pas une photo, pas une vidéo."
       rail={<StepIndicator steps={[{ label: 'Document' }, { label: 'Visage' }, { label: 'Résultat' }]} currentStep={2} />}
     >
-      <ScanFrame active={processing} tone={error ? 'danger' : 'accent'}>
-        <span className="text-3xl" aria-hidden="true">
-          &#128064;
-        </span>
+      <ScanFrame active={processing} tone={error ? 'danger' : 'accent'} shape="oval">
+        <FaceScanIcon />
       </ScanFrame>
 
       <div className="mt-6 flex justify-center gap-4 font-mono text-[11px] text-muted">

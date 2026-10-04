@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { WelcomeScreen } from './screens/WelcomeScreen'
 import { DocumentTypeSelectScreen } from './screens/DocumentTypeSelectScreen'
 import { IDScanScreen } from './screens/IDScanScreen'
 import { LivenessScreen } from './screens/LivenessScreen'
@@ -9,7 +8,7 @@ import { EventLogPanel } from './components/EventLogPanel'
 import { match3D2DUploadedIDPhoto, setApiBase } from './services/facetecProxy'
 import { notifyParentComplete } from './services/embedBridge'
 import { buildFaceTecResultPayload, submitFaceTecResult } from './services/backendSubmission'
-import type { VerificationStep, FaceTecVerificationResult, IDScanResult } from './types/facetec'
+import type { VerificationStep, FaceTecVerificationResult, IDScanResult, DocumentType } from './types/facetec'
 
 // ── Launch params ─────────────────────────────────────────────────────────
 // protegey-partner-web creates the KycEnrollment (it's authenticated, this
@@ -41,7 +40,8 @@ function readLaunchParams() {
 
 export function App() {
   const [{ enrollmentId, token, returnUrl, parentOrigin, apiBase }] = useState(readLaunchParams)
-  const [screen, setScreen] = useState<VerificationStep>('welcome')
+  const [screen, setScreen] = useState<VerificationStep>('document-type-select')
+  const [documentType, setDocumentType] = useState<DocumentType>('cni')
   const [result, setResult] = useState<FaceTecVerificationResult | null>(null)
   const [sdkLoaded, setSdkLoaded] = useState(false)
   const [idScanResult, setIDScanResult] = useState<IDScanResult | null>(null)
@@ -50,7 +50,8 @@ export function App() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const handleDocumentTypeSelect = (_type: string) => {
+  const handleDocumentTypeSelect = (type: DocumentType) => {
+    setDocumentType(type);
     setIDScanResult(null);
     setScreen('id-scan');
   };
@@ -129,7 +130,7 @@ export function App() {
     setIDScanResult(null);
     setMatchResult(null);
     setMatchError(null);
-    setScreen('welcome');
+    setScreen('document-type-select');
   };
 
   const handleGoToDocumentSelect = () => {
@@ -139,26 +140,17 @@ export function App() {
   return (
     <div className="min-h-screen bg-bg">
       <EventLogPanel />
-      {!sdkLoaded && screen === 'welcome' && (
+      {!sdkLoaded && screen === 'document-type-select' && (
         <FaceTecSDKLoader onSDKLoaded={() => setSdkLoaded(true)} onError={handleError} />
       )}
 
-      {screen === 'welcome' && (
-        <WelcomeScreen
-          onStart={handleGoToDocumentSelect}
-          onContinueWithDidit={() => window.location.href = '/kyc'}
-        />
-      )}
-
       {screen === 'document-type-select' && (
-        <DocumentTypeSelectScreen
-          onSelect={handleDocumentTypeSelect}
-          onBack={() => setScreen('welcome')}
-        />
+        <DocumentTypeSelectScreen onSelect={handleDocumentTypeSelect} />
       )}
 
       {screen === 'id-scan' && (
         <IDScanScreen
+          documentType={documentType}
           onIDScanComplete={handleIDScanComplete}
           onBack={handleGoToDocumentSelect}
           onError={handleError}

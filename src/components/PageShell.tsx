@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ProtegeyLogo } from './ProtegeyLogo';
 
 interface PageShellProps {
   onBack?: () => void;
@@ -33,6 +34,10 @@ export function PageShell({ onBack, title, description, children, rail }: PageSh
           {description && <p className="mt-1.5 max-w-[42ch] text-[15px] leading-relaxed text-muted">{description}</p>}
         </div>
         <div className="rounded-2xl border border-border bg-surface p-6">{children}</div>
+
+        <div className="mt-6 flex justify-center">
+          <ProtegeyLogo />
+        </div>
       </div>
     </div>
   );

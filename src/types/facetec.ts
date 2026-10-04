@@ -67,7 +67,7 @@ export interface FaceTecVerificationResult {
 
 // ── Verification types ─────────────────────────────────────────────────
 
-export type VerificationStep = 'welcome' | 'document-type-select' | 'id-scan' | 'liveness' | 'result';
+export type VerificationStep = 'document-type-select' | 'id-scan' | 'liveness' | 'result';
 
 export type DocumentType = 'cni' | 'passport';
 

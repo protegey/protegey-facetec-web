@@ -1,19 +1,38 @@
 import { useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
-import type { IDScanResult } from '../types/facetec';
+import type { DocumentType, IDScanResult } from '../types/facetec';
 import { FaceTecOverlay } from '../components/FaceTecOverlay';
 import { PageShell } from '../components/PageShell';
 import { StepIndicator } from '../components/StepIndicator';
 import { ScanFrame } from '../components/ScanFrame';
+import { IdCardIcon, PassportIcon } from '../components/DocumentIcons';
 import { logSdkEvent } from '../services/sdkEventLog';
 
 interface Props {
+  documentType: DocumentType;
   onIDScanComplete: (result: IDScanResult) => void;
   onBack: () => void;
   onError: (error: string) => void;
 }
 
-export function IDScanScreen({ onIDScanComplete, onBack, onError }: Props) {
+const COPY: Record<DocumentType, { title: string; description: string; captureLabel: string; icon: typeof IdCardIcon }> = {
+  cni: {
+    title: 'Scannez votre carte d’identité',
+    description: 'Présentez le recto, puis le verso — bien à plat, dans le cadre, sous un bon éclairage.',
+    captureLabel: 'Démarrer le scan',
+    icon: IdCardIcon,
+  },
+  passport: {
+    title: 'Scannez votre passeport',
+    description: 'Présentez la page principale (photo et informations), bien à plat, dans le cadre.',
+    captureLabel: 'Démarrer le scan',
+    icon: PassportIcon,
+  },
+};
+
+export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }: Props) {
+  const copy = COPY[documentType];
+  const Icon = copy.icon;
   const [showOverlay, setShowOverlay] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -54,14 +73,12 @@ export function IDScanScreen({ onIDScanComplete, onBack, onError }: Props) {
   return (
     <PageShell
       onBack={onBack}
-      title="Scannez votre document"
-      description="Placez le document bien à plat, dans le cadre, sous un bon éclairage."
+      title={copy.title}
+      description={copy.description}
       rail={<StepIndicator steps={[{ label: 'Document' }, { label: 'Visage' }, { label: 'Résultat' }]} currentStep={1} />}
     >
-      <ScanFrame active={processing} tone={error ? 'danger' : 'accent'}>
-        <span className="text-3xl" aria-hidden="true">
-          &#128196;
-        </span>
+      <ScanFrame active={processing} tone={error ? 'danger' : 'accent'} shape="rect">
+        <Icon />
       </ScanFrame>
 
       <div className="mt-6 flex justify-center gap-4 font-mono text-[11px] text-muted">
@@ -79,7 +96,7 @@ export function IDScanScreen({ onIDScanComplete, onBack, onError }: Props) {
         disabled={loading || processing}
         className="mt-6 w-full cursor-pointer rounded-xl bg-accent py-3.5 font-display font-semibold text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {loading || processing ? 'Scan en cours…' : error ? 'Réessayer' : 'Démarrer le scan'}
+        {loading || processing ? 'Scan en cours…' : error ? 'Réessayer' : copy.captureLabel}
       </button>
 
       {showOverlay && (
