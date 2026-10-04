@@ -17,6 +17,14 @@ interface ProxyResponse<T> {
   error?: string;
 }
 
+/** Required on every call to FaceTec's Testing API (not the regular Production Server SDK) — only
+ * the browser-side SDK itself can compute this, so our backend can't generate it; it has to be
+ * captured here and forwarded with each request. Computed fresh per call since FaceTec's own
+ * sample app does the same rather than caching it. */
+function getTestingApiHeader(): string {
+  return window.FaceTecSDK?.getTestingAPIHeader?.() ?? '';
+}
+
 async function proxyRequest<T>(
   endpoint: string,
   body: Record<string, unknown>,
@@ -25,7 +33,7 @@ async function proxyRequest<T>(
     const res = await fetch(`${API_BASE}/partner/pan-id/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, testingApiHeader: getTestingApiHeader() }),
     });
 
     if (!res.ok) {
