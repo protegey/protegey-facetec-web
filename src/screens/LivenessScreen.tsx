@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
 import type { FaceTecVerificationResult } from '../types/facetec';
-import { FaceTecOverlay } from '../components/FaceTecOverlay';
 import { PageShell } from '../components/PageShell';
 import { StepIndicator } from '../components/StepIndicator';
 import { ScanFrame } from '../components/ScanFrame';
@@ -15,9 +14,11 @@ interface Props {
 }
 
 export function LivenessScreen({ onComplete, onBack, onError }: Props) {
-  const [showOverlay, setShowOverlay] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  // See the matching state in IDScanScreen — true until the auto-launch fails (show the retry UI)
+  // or hands off to FaceTec's own UI (which covers everything anyway).
+  const [starting, setStarting] = useState(true);
 
   const { initializeFaceTec, startLiveness, loading } = useFaceTec({
     verificationType: 'liveness',
@@ -28,7 +29,6 @@ export function LivenessScreen({ onComplete, onBack, onError }: Props) {
 
   const handleStartLiveness = async () => {
     if (error) logSdkEvent('FV_RETRY', 'Nouvelle tentative de contrôle de vivacité');
-    setShowOverlay(true);
     setProcessing(true);
     setError(null);
 
@@ -36,21 +36,22 @@ export function LivenessScreen({ onComplete, onBack, onError }: Props) {
       const initialized = await initializeFaceTec();
       if (!initialized) {
         setError('Échec de l’initialisation du SDK');
-        setShowOverlay(false);
         setProcessing(false);
+        setStarting(false);
         return;
       }
       const result = await startLiveness();
       if (result) {
         logSdkEvent('CAPTURE_DONE', 'Contrôle de vivacité terminé');
         onComplete(result);
+      } else {
+        setStarting(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Échec du contrôle de vivacité');
-      setShowOverlay(false);
+      setStarting(false);
     } finally {
       setProcessing(false);
-      setShowOverlay(false);
     }
   };
 
@@ -63,6 +64,17 @@ export function LivenessScreen({ onComplete, onBack, onError }: Props) {
     setTimeout(() => void handleStartLiveness(), 1500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (starting) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-border border-t-accent" />
+          <p className="text-sm text-muted">Préparation du contrôle facial…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <PageShell
@@ -96,18 +108,6 @@ export function LivenessScreen({ onComplete, onBack, onError }: Props) {
       <p className="mt-4 text-center text-xs text-muted">
         Vos données biométriques sont traitées de façon sécurisée et jamais stockées sur cet appareil.
       </p>
-
-      {showOverlay && (
-        <FaceTecOverlay active={showOverlay} onClose={() => setShowOverlay(false)}>
-          <div className="flex flex-1 items-center justify-center p-4">
-            <div className="text-center">
-              <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-2 border-border border-t-accent" />
-              <p className="font-display font-semibold text-ink">Initialisation…</p>
-              <p className="mt-1 text-sm text-muted">Autorisez l'accès à la caméra</p>
-            </div>
-          </div>
-        </FaceTecOverlay>
-      )}
     </PageShell>
   );
 }

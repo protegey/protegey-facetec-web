@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
 import type { DocumentType, IDScanResult } from '../types/facetec';
-import { FaceTecOverlay } from '../components/FaceTecOverlay';
 import { PageShell } from '../components/PageShell';
 import { StepIndicator } from '../components/StepIndicator';
 import { ScanFrame } from '../components/ScanFrame';
@@ -33,9 +32,12 @@ const COPY: Record<DocumentType, { title: string; description: string; captureLa
 export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }: Props) {
   const copy = COPY[documentType];
   const Icon = copy.icon;
-  const [showOverlay, setShowOverlay] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  // True from mount until the auto-launch either fails (then we need the retry button and the
+  // error message visible) or hands off to FaceTec's own UI (which covers everything anyway) — the
+  // full "Démarrer le scan" screen has no reason to flash on screen first every single time.
+  const [starting, setStarting] = useState(true);
 
   const { initializeFaceTec, startIDScanOnly, loading } = useFaceTec({
     verificationType: 'match',
@@ -46,7 +48,6 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
 
   const handleStartIDScan = async () => {
     if (error) logSdkEvent('FV_RETRY', 'Nouvelle tentative de scan du document');
-    setShowOverlay(true);
     setProcessing(true);
     setError(null);
 
@@ -54,21 +55,22 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
       const initialized = await initializeFaceTec();
       if (!initialized) {
         setError('Échec de l’initialisation du SDK');
-        setShowOverlay(false);
         setProcessing(false);
+        setStarting(false);
         return;
       }
       const result = await startIDScanOnly();
       if (result) {
         logSdkEvent('CAPTURE_DONE', 'Scan du document terminé');
         onIDScanComplete(result);
+      } else {
+        setStarting(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Échec du scan du document');
-      setShowOverlay(false);
+      setStarting(false);
     } finally {
       setProcessing(false);
-      setShowOverlay(false);
     }
   };
 
@@ -89,6 +91,17 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
     setTimeout(() => void handleStartIDScan(), 1500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (starting) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-border border-t-accent" />
+          <p className="text-sm text-muted">Préparation du scan…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <PageShell
@@ -118,18 +131,6 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
       >
         {loading || processing ? 'Scan en cours…' : error ? 'Réessayer' : copy.captureLabel}
       </button>
-
-      {showOverlay && (
-        <FaceTecOverlay active={showOverlay} onClose={() => setShowOverlay(false)}>
-          <div className="flex flex-1 items-center justify-center p-4">
-            <div className="text-center">
-              <div className="mx-auto mb-4 h-14 w-14 animate-spin rounded-full border-2 border-border border-t-accent" />
-              <p className="font-display font-semibold text-ink">Scan du document…</p>
-              <p className="mt-1 text-sm text-muted">Maintenez le document dans le cadre</p>
-            </div>
-          </div>
-        </FaceTecOverlay>
-      )}
     </PageShell>
   );
 }
