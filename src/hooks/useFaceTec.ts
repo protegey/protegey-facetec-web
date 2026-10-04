@@ -1,10 +1,26 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { FaceTecVerificationResult, VerificationType, IDScanResult } from '../types/facetec';
 import { requestFaceTecProcessing, getSessionResult } from '../services/facetecProxy';
+import { applyProtegeyFaceTecTheme } from '../services/faceTecTheme';
 
 interface UseFaceTecOptions {
   verificationType: VerificationType;
   onError: (error: string) => void;
+}
+
+/** Loosely typed on purpose — these mirror FaceTec's own FaceTecCustomization.d.ts (vendored
+ * under FaceTecSDK-browser-10.1.18/, not an importable package), so re-declaring every property
+ * here would just be a second, easily-stale copy of their types. Each nested object's real
+ * properties are documented at the single call site that sets them (faceTecTheme.ts). */
+type FaceTecCustomizationSection = Record<string, string | number | boolean>;
+
+export interface FaceTecCustomizationInstance {
+  frameCustomization: FaceTecCustomizationSection;
+  overlayCustomization: FaceTecCustomizationSection;
+  feedbackCustomization: FaceTecCustomizationSection;
+  guidanceCustomization: FaceTecCustomizationSection;
+  resultScreenCustomization: FaceTecCustomizationSection;
+  ovalCustomization: FaceTecCustomizationSection;
 }
 
 declare global {
@@ -19,6 +35,8 @@ declare global {
         callback: FaceTecInitializeCallback,
       ) => void;
       deinitialize: (callback: () => void) => void;
+      FaceTecCustomization: new () => FaceTecCustomizationInstance;
+      setCustomization: (customization: FaceTecCustomizationInstance) => void;
     };
   }
 }
@@ -122,6 +140,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       // folders sit right next to it at public/core-sdk/resources and public/core-sdk/FaceTec_images.
       window.FaceTecSDK.setResourceDirectory('/core-sdk/resources');
       window.FaceTecSDK.setImagesDirectory('/core-sdk/FaceTec_images');
+      applyProtegeyFaceTecTheme();
 
       window.FaceTecSDK.initializeWithSessionRequest(
         import.meta.env.VITE_FACE_TEC_DEVICE_KEY ?? 'dlrL00OosNJyky981KCeSVtVW63vPvtM',
