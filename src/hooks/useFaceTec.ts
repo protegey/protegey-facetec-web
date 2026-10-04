@@ -86,6 +86,17 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
         return;
       }
 
+      // Calling initializeWithSessionRequest a second time without the SDK's own WASM runtime
+      // ever being torn down (deinitialize() only runs when this screen unmounts — see below, not
+      // between retries on the same screen) corrupts its Emscripten Module object: the next
+      // attempt crashes with "Cannot assign to read only property 'locateFile'" instead of
+      // actually retrying. Idempotent here: an existing instance means we already succeeded once,
+      // so reuse it instead of re-initializing.
+      if (sdkInstanceRef.current) {
+        resolve(true);
+        return;
+      }
+
       const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
         onSessionRequest: processSessionRequest,
         onFaceTecExit: (result: FaceTecSessionResult) => {
