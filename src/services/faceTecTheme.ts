@@ -23,9 +23,11 @@ export function applyProtegeyFaceTecTheme(): void {
   customization.frameCustomization.borderColor = 'transparent';
   customization.frameCustomization.backgroundColor = NAVY;
 
-  // The overlay behind the frame (visible letterboxing on wide screens).
+  // The overlay behind the frame (visible letterboxing on wide screens) — FaceTec renders our own
+  // logo underneath the frame when given one, same spot our own screens put it (PageShell).
   customization.overlayCustomization.backgroundColor = NAVY;
-  customization.overlayCustomization.showBrandingImage = false;
+  customization.overlayCustomization.showBrandingImage = true;
+  customization.overlayCustomization.brandingImage = 'https://protegey-bucket.s3.eu-north-1.amazonaws.com/public/constant/protegey_logo.svg';
 
   // The instruction pill ("Scan Front of ID", "Hold Still", etc.) shown during live capture.
   customization.feedbackCustomization.backgroundColor = 'rgba(16, 29, 84, 0.9)';
