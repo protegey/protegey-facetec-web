@@ -54,12 +54,13 @@ export function LivenessScreen({ onComplete, onBack, onError }: Props) {
     }
   };
 
-  // Same reasoning as IDScanScreen: launch straight into the camera on arrival, no second tap
-  // needed. The button stays for the retry path if this first attempt fails.
+  // Same reasoning and same StrictMode caveat as IDScanScreen (see its comment) — a short settle
+  // delay before calling in, and deliberately no cleanup function so React's dev-mode synthetic
+  // unmount/remount can't cancel the only scheduled call.
   useEffect(() => {
     if (autoStarted.current) return;
     autoStarted.current = true;
-    void handleStartLiveness();
+    setTimeout(() => void handleStartLiveness(), 1500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

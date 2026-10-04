@@ -72,13 +72,21 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
     }
   };
 
-  // Launch straight into the camera the moment this screen appears — the document-type choice was
-  // itself the user's "I'm ready" gesture, no need to make them tap a second button before the
-  // capture UI opens. The button stays below for the retry path if this first attempt fails.
+  // Launch straight into the camera shortly after this screen appears — the document-type choice
+  // was itself the user's "I'm ready" gesture, no need to make them tap a second button. The short
+  // delay matters: FaceTecSDKLoader's onSDKLoaded fires once the script has executed, but the WASM
+  // runtime's own async setup (compiling/instantiating) keeps running in the background after
+  // that — calling into the SDK before it's actually settled is what was leaving one of its
+  // resource fetches stuck at "pending" forever (a manual click happened to leave enough of a gap
+  // for this not to show up before). The button stays below for the retry path regardless.
   useEffect(() => {
     if (autoStarted.current) return;
     autoStarted.current = true;
-    void handleStartIDScan();
+    // No cleanup returned on purpose — React StrictMode mounts, synthetically unmounts, then
+    // re-mounts every component once in dev. A cleanup that clearTimeout()s this would cancel the
+    // only scheduled call during that synthetic unmount, and the ref guard then blocks the re-mount
+    // from scheduling a replacement — net result, handleStartIDScan silently never runs at all.
+    setTimeout(() => void handleStartIDScan(), 1500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
