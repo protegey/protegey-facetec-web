@@ -122,7 +122,11 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
 
   const startLiveness = useCallback(async (): Promise<FaceTecVerificationResult | null> => {
     const sdkInstance = sdkInstanceRef.current;
-    if (!sdkInstance || !initialized) {
+    // Deliberately NOT checking the `initialized` state here — callers always call
+    // `await initializeFaceTec()` immediately before this, in the same function, with no render in
+    // between. `initialized` (state) would still read stale/false at this point since React hasn't
+    // re-rendered yet; `sdkInstanceRef` (a ref) is the only signal that's actually up to date here.
+    if (!sdkInstance) {
       onError('FaceTec SDK not initialized');
       return null;
     }
@@ -159,11 +163,13 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     } finally {
       setLoading(false);
     }
-  }, [initialized, onError, processSessionRequest]);
+  }, [onError, processSessionRequest]);
 
   const startIDScanOnly = useCallback(async (): Promise<IDScanResult | null> => {
     const sdkInstance = sdkInstanceRef.current;
-    if (!sdkInstance || !initialized) {
+    // See the matching comment in startLiveness — same stale-closure reason for not checking
+    // `initialized` here.
+    if (!sdkInstance) {
       onError('FaceTec SDK not initialized');
       return null;
     }
@@ -200,7 +206,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     } finally {
       setLoading(false);
     }
-  }, [initialized, onError, processSessionRequest]);
+  }, [onError, processSessionRequest]);
 
   const startEnrollment = useCallback(async (externalDatabaseRefID: string): Promise<FaceTecVerificationResult | null> => {
     const result = await startLiveness();
