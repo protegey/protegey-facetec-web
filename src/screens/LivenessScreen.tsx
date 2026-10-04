@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
 import type { FaceTecVerificationResult } from '../types/facetec';
 import { FaceTecOverlay } from '../components/FaceTecOverlay';
@@ -23,6 +23,8 @@ export function LivenessScreen({ onComplete, onBack, onError }: Props) {
     verificationType: 'liveness',
     onError,
   });
+
+  const autoStarted = useRef(false);
 
   const handleStartLiveness = async () => {
     if (error) logSdkEvent('FV_RETRY', 'Nouvelle tentative de contrôle de vivacité');
@@ -51,6 +53,15 @@ export function LivenessScreen({ onComplete, onBack, onError }: Props) {
       setShowOverlay(false);
     }
   };
+
+  // Same reasoning as IDScanScreen: launch straight into the camera on arrival, no second tap
+  // needed. The button stays for the retry path if this first attempt fails.
+  useEffect(() => {
+    if (autoStarted.current) return;
+    autoStarted.current = true;
+    void handleStartLiveness();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <PageShell

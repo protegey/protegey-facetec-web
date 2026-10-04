@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
 import type { DocumentType, IDScanResult } from '../types/facetec';
 import { FaceTecOverlay } from '../components/FaceTecOverlay';
@@ -42,6 +42,8 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
     onError,
   });
 
+  const autoStarted = useRef(false);
+
   const handleStartIDScan = async () => {
     if (error) logSdkEvent('FV_RETRY', 'Nouvelle tentative de scan du document');
     setShowOverlay(true);
@@ -69,6 +71,16 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
       setShowOverlay(false);
     }
   };
+
+  // Launch straight into the camera the moment this screen appears — the document-type choice was
+  // itself the user's "I'm ready" gesture, no need to make them tap a second button before the
+  // capture UI opens. The button stays below for the retry path if this first attempt fails.
+  useEffect(() => {
+    if (autoStarted.current) return;
+    autoStarted.current = true;
+    void handleStartIDScan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <PageShell
