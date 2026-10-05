@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import { ScanFrame } from '../components/ScanFrame';
 import type { FaceTecVerificationResult, IDScanResult } from '../types/facetec';
+
+const AUTO_CLOSE_SECONDS = 5;
 
 interface Props {
   result: FaceTecVerificationResult;
@@ -30,6 +33,22 @@ export function ResultScreen({ result, idScanResult, onRestart, submitting, subm
   const matchLevel = riskFactors.matchLevel || undefined;
   const docData = idScanResult?.documentData;
   const tone = passed ? 'success' : 'danger';
+
+  // Only when launched from a mobile SDK's webview (no returnUrl), and only once submission has
+  // actually finished successfully — auto-closing mid-submit, or over a failed save, would hide a
+  // problem the user still needs to see and react to (Réessayer).
+  const shouldAutoClose = !returnUrl && Boolean(onClose) && !submitting && !submitError;
+  const [secondsLeft, setSecondsLeft] = useState(AUTO_CLOSE_SECONDS);
+
+  useEffect(() => {
+    if (!shouldAutoClose) return;
+    if (secondsLeft <= 0) {
+      onClose?.();
+      return;
+    }
+    const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [shouldAutoClose, secondsLeft, onClose]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-bg px-4 py-10">
@@ -109,7 +128,7 @@ export function ResultScreen({ result, idScanResult, onRestart, submitting, subm
               onClick={onClose}
               className="w-full cursor-pointer rounded-xl bg-accent py-3.5 font-display font-semibold text-bg transition-opacity hover:opacity-90"
             >
-              Fermer
+              {shouldAutoClose ? `Fermer (${secondsLeft}s)` : 'Fermer'}
             </button>
           )}
           <button
