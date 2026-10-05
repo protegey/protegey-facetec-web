@@ -41,7 +41,7 @@ export function EventLogPanel() {
                     <span className="text-ink">{event.type}</span>
                     <span className="flex-shrink-0 text-muted">{formatTime(event.at)}</span>
                   </div>
-                  <p className="truncate text-muted">{event.message}</p>
+                  <p className="whitespace-pre-wrap break-words text-muted">{event.message}</p>
                 </div>
               </div>
             ))}
