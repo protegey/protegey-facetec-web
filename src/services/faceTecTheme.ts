@@ -8,6 +8,7 @@ const TEAL = '#16d6b6';
 const INK = '#f4f6f8';
 const MUTED = '#93a2c7';
 const DANGER = '#ff8a3d';
+const BORDER = '#24315f';
 // Same Google Fonts already loaded for the rest of this app in index.css — FaceTec just needs the
 // CSS font-family string, same as any other font-family declaration.
 const FONT_DISPLAY = '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif';
@@ -111,6 +112,51 @@ export function applyProtegeyFaceTecTheme(): void {
   idScan.buttonTextHighlightColor = '#06231d';
   idScan.buttonTextDisabledColor = '#06231d';
   idScan.buttonBorderColor = 'transparent';
+
+  // The OCR Confirmation Screen ("Examiner et confirmer") — a completely separate namespace from
+  // everything above, so it was left on FaceTec's plain white/blue default until now: cramped
+  // spacing, English field labels (handled separately via configureOCRLocalization — see
+  // useFaceTec.ts), and a default blue "Défiler vers le bas" pill that clashed with our palette.
+  const ocr = customization.ocrConfirmationCustomization;
+  ocr.backgroundColors = NAVY;
+  ocr.mainHeaderDividerLineColor = TEAL;
+  ocr.mainHeaderFont = FONT_DISPLAY;
+  ocr.mainHeaderTextColor = INK;
+  ocr.sectionHeaderFont = FONT_DISPLAY;
+  ocr.sectionHeaderTextColor = INK;
+  ocr.fieldLabelFont = FONT_BODY;
+  ocr.fieldLabelTextColor = MUTED;
+  ocr.fieldValueFont = FONT_BODY;
+  ocr.fieldValueTextColor = INK;
+
+  ocr.inputFieldBackgroundColor = SURFACE;
+  ocr.inputFieldFont = FONT_BODY;
+  ocr.inputFieldTextColor = INK;
+  ocr.inputFieldBorderColor = BORDER;
+  ocr.inputFieldBorderWidth = '1px';
+  ocr.inputFieldCornerRadius = '12px';
+  ocr.inputFieldPlaceholderFont = FONT_BODY;
+  ocr.inputFieldPlaceholderTextColor = MUTED;
+  ocr.showInputFieldBottomBorderOnly = false;
+
+  ocr.buttonFont = FONT_DISPLAY;
+  ocr.buttonBorderColor = 'transparent';
+  ocr.buttonCornerRadius = '12px';
+  ocr.buttonTextNormalColor = '#06231d';
+  ocr.buttonTextHighlightColor = '#06231d';
+  ocr.buttonTextDisabledColor = '#06231d';
+  ocr.buttonBackgroundNormalColor = TEAL;
+  ocr.buttonBackgroundHighlightColor = '#11b89c';
+  ocr.buttonBackgroundDisabledColor = MUTED;
+
+  // The "Défiler vers le bas" pill shown when fields overflow the screen.
+  ocr.scrollIndicatorBackgroundNormalColor = SURFACE;
+  ocr.scrollIndicatorBackgroundHighlightColor = SURFACE;
+  ocr.scrollIndicatorForegroundNormalColor = TEAL;
+  ocr.scrollIndicatorForegroundHighlightColor = TEAL;
+  ocr.scrollIndicatorBorderColor = 'transparent';
+  ocr.scrollIndicatorCornerRadius = '999px';
+  ocr.scrollIndicatorFont = FONT_DISPLAY;
 
   sdk.setCustomization(customization);
 }

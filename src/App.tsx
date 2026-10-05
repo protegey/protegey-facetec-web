@@ -122,6 +122,13 @@ export function App() {
     }
   };
 
+  // Launched from a mobile SDK's in-app webview (no returnUrl, no window.opener) — window.close()
+  // is a best-effort attempt; most WebView hosts don't let a page close itself, so the Close
+  // button mainly exists for hosts that do. Either way it's harmless to attempt.
+  const handleClose = () => {
+    window.close();
+  };
+
   const handleError = (_error: string) => {
     console.error('SDK Error:', _error);
     // Every onError(...) across the app (SDK load, init, capture) funnels through here — this is
@@ -180,6 +187,7 @@ export function App() {
           submitError={submitError}
           returnUrl={returnUrl}
           onReturnToPartner={handleReturnToPartner}
+          onClose={handleClose}
         />
       )}
     </div>

@@ -15,13 +15,16 @@ interface Props {
    * back once they're done here. */
   returnUrl?: string | null;
   onReturnToPartner?: () => void;
+  /** Launched from a mobile SDK's in-app webview (no returnUrl) — the one thing the user needs to
+   * do here is close this view and go back to the host app, so this becomes the primary action. */
+  onClose?: () => void;
 }
 
 function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export function ResultScreen({ result, matchResult, matchError, onRestart, submitting, submitError, returnUrl, onReturnToPartner }: Props) {
+export function ResultScreen({ result, matchResult, matchError, onRestart, submitting, submitError, returnUrl, onReturnToPartner, onClose }: Props) {
   const { passed, confidenceScore, livenessScore, riskFactors, deviceInfo, sessionId } = result;
   const matchLevel = matchResult ? Number(matchResult.matchLevel ?? 0) : undefined;
   const docData = matchResult && matchResult.documentData ? (matchResult.documentData as Record<string, unknown>) : null;
@@ -101,10 +104,18 @@ export function ResultScreen({ result, matchResult, matchError, onRestart, submi
               Retour au portail
             </button>
           )}
+          {!returnUrl && onClose && (
+            <button
+              onClick={onClose}
+              className="w-full cursor-pointer rounded-xl bg-accent py-3.5 font-display font-semibold text-bg transition-opacity hover:opacity-90"
+            >
+              Fermer
+            </button>
+          )}
           <button
             onClick={onRestart}
             className={`w-full cursor-pointer rounded-xl py-3.5 font-display font-semibold transition-colors ${
-              returnUrl
+              returnUrl || onClose
                 ? 'border border-border bg-surface text-ink hover:border-muted'
                 : 'bg-accent text-bg hover:opacity-90'
             }`}
