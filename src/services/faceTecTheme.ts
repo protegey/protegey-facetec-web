@@ -31,7 +31,11 @@ export function applyProtegeyFaceTecTheme(): void {
   // logo underneath the frame when given one, same spot our own screens put it (PageShell).
   customization.overlayCustomization.backgroundColor = NAVY;
   customization.overlayCustomization.showBrandingImage = true;
-  customization.overlayCustomization.brandingImage = 'https://protegey-bucket.s3.eu-north-1.amazonaws.com/public/constant/protegey_logo.svg';
+  // The full wordmark logo (shield + "Protegey" text, ~5:1 aspect ratio) rendered huge here —
+  // FaceTec renders this image at a fixed height, so a very wide asset ends up spanning most of
+  // the screen width. The shield-only mark (square, already shipped as this app's own favicon) is
+  // the same asset used at a much smaller visual size elsewhere in the app's own UI.
+  customization.overlayCustomization.brandingImage = '/favicon.svg';
 
   // The instruction pill ("Scan Front of ID", "Hold Still", etc.) shown during live capture.
   customization.feedbackCustomization.backgroundColor = 'rgba(16, 29, 84, 0.9)';
