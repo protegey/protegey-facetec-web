@@ -149,8 +149,8 @@ export function App() {
         <FaceTecSDKLoader onSDKLoaded={() => setSdkLoaded(true)} onError={handleError} />
       )}
 
-      {screen === 'document-type-select' && (
-        <DocumentTypeSelectScreen onSelect={handleDocumentTypeSelect} sdkReady={sdkLoaded} />
+      {sdkLoaded && screen === 'document-type-select' && (
+        <DocumentTypeSelectScreen onSelect={handleDocumentTypeSelect} />
       )}
 
       {screen === 'id-scan' && (

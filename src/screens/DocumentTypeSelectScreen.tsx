@@ -6,12 +6,6 @@ import type { DocumentType } from '../types/facetec';
 
 interface Props {
   onSelect: (type: DocumentType) => void;
-  // False until FaceTecSDKLoader has finished loading the SDK AND the camera preflight — on a
-  // cold load (no browser cache, e.g. a fresh in-app WebView) this can take a couple of seconds,
-  // long enough for someone to tap a card and "Continuer" before it's ready. Without this gate,
-  // that lands IDScanScreen's initializeFaceTec() on a `window.FaceTecSDK` that doesn't exist yet
-  // — "Échec de l'initialisation du SDK" even though the SDK was only ever a moment away.
-  sdkReady: boolean;
 }
 
 const DOCUMENT_OPTIONS: { type: DocumentType; label: string; hint: string; icon: typeof IdCardIcon }[] = [
@@ -19,7 +13,7 @@ const DOCUMENT_OPTIONS: { type: DocumentType; label: string; hint: string; icon:
   { type: 'passport', label: 'Passeport', hint: 'Page principale uniquement', icon: PassportIcon },
 ];
 
-export function DocumentTypeSelectScreen({ onSelect, sdkReady }: Props) {
+export function DocumentTypeSelectScreen({ onSelect }: Props) {
   const [selected, setSelected] = useState<DocumentType | null>(null);
 
   return (
@@ -53,10 +47,10 @@ export function DocumentTypeSelectScreen({ onSelect, sdkReady }: Props) {
 
       <button
         onClick={() => selected && onSelect(selected)}
-        disabled={!selected || !sdkReady}
+        disabled={!selected}
         className="mt-6 w-full cursor-pointer rounded-xl bg-accent py-3.5 font-display font-semibold text-bg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
       >
-        {selected && !sdkReady ? 'Préparation du scanner…' : 'Continuer'}
+        Continuer
       </button>
     </PageShell>
   );
