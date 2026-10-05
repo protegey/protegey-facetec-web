@@ -22,6 +22,7 @@ export interface FaceTecCustomizationInstance {
   resultScreenCustomization: FaceTecCustomizationSection;
   ovalCustomization: FaceTecCustomizationSection;
   idScanCustomization: FaceTecCustomizationSection;
+  initialLoadingAnimationCustomization: FaceTecCustomizationSection;
 }
 
 declare global {
