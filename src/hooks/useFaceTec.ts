@@ -3,6 +3,7 @@ import type { FaceTecVerificationResult, VerificationType, IDScanResult } from '
 import { requestFaceTecProcessing, getSessionResult } from '../services/facetecProxy';
 import { applyProtegeyFaceTecTheme } from '../services/faceTecTheme';
 import { faceTecFrenchStrings } from '../services/faceTecLocalization';
+import { faceTecOcrLocalizationFr } from '../services/faceTecOcrLocalization';
 
 interface UseFaceTecOptions {
   verificationType: VerificationType;
@@ -24,6 +25,7 @@ export interface FaceTecCustomizationInstance {
   ovalCustomization: FaceTecCustomizationSection;
   idScanCustomization: FaceTecCustomizationSection;
   initialLoadingAnimationCustomization: FaceTecCustomizationSection;
+  ocrConfirmationCustomization: FaceTecCustomizationSection;
 }
 
 declare global {
@@ -41,6 +43,7 @@ declare global {
       FaceTecCustomization: new () => FaceTecCustomizationInstance;
       setCustomization: (customization: FaceTecCustomizationInstance) => void;
       configureLocalization: (localizationJSON: Record<string, string>) => void;
+      configureOCRLocalization: (ocrLocalizationJSON: Record<string, unknown>) => void;
     };
   }
 }
@@ -82,7 +85,12 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       setLoading(true);
       try {
         const doProcess = async () => {
-          const result = await requestFaceTecProcessing(requestBlob, verificationType);
+          // sessionIdRef.current is set right before the native session starts (see startLiveness
+          // / startIDScanOnly) and forwarded as externalDatabaseRefID on every request of the
+          // session — FaceTec's Device SDK automatically re-sends whatever we pass here on every
+          // subsequent request within the same session, so this is also what later identifies the
+          // session to getSessionResult() once it's done.
+          const result = await requestFaceTecProcessing(requestBlob, verificationType, sessionIdRef.current ?? undefined);
           if (result.success && result.data) {
             requestCallback.processResponse(result.data.responseBlob);
           } else {
@@ -133,6 +141,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
           // which runs before) — this is what actually translates the live capture screen's
           // instruction text ("Scan Front of ID" etc.) into French.
           window.FaceTecSDK?.configureLocalization(faceTecFrenchStrings);
+          window.FaceTecSDK?.configureOCRLocalization(faceTecOcrLocalizationFr);
           setInitialized(true);
           resolve(true);
         },
@@ -170,6 +179,13 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     }
 
     setLoading(true);
+    // FaceTec's Browser SDK never hands back a session identifier of its own (confirmed against
+    // the vendored FaceTecPublicApi.d.ts — FaceTecSessionResult only carries `status`) — generating
+    // our own and passing it as externalDatabaseRefID on every request (see processSessionRequest)
+    // is the documented way to give the session a stable ID, since FaceTec's Device SDK echoes it
+    // back on every subsequent request of the same session. This is what getSessionResult() below
+    // actually looks up afterwards.
+    sessionIdRef.current = crypto.randomUUID();
     try {
       await new Promise<void>((resolve, reject) => {
         const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
@@ -213,6 +229,8 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     }
 
     setLoading(true);
+    // See the matching comment in startLiveness — same reason for generating our own ID here.
+    sessionIdRef.current = crypto.randomUUID();
     try {
       await new Promise<void>((resolve, reject) => {
         const sessionRequestProcessor: FaceTecSessionRequestProcessor = {

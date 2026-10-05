@@ -55,7 +55,7 @@ export async function requestFaceTecProcessing(
   sessionRequestBlob: string,
   verificationType: string,
   externalDatabaseRefID?: string,
-): Promise<ProxyResponse<{ responseBlob: string; sessionId: string }>> {
+): Promise<ProxyResponse<{ responseBlob: string }>> {
   return proxyRequest('face-process', {
     sessionRequestBlob,
     verificationType,
