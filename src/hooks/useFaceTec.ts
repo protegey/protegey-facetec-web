@@ -72,6 +72,10 @@ interface FaceTecInitializeCallback {
 interface FaceTecSDKInstance {
   start3DLiveness(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
   startIDScanOnly(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
+  // The one-session "scan the document, then scan the face, then match them" flow — startIDScanOnly
+  // is literally ID-only (no face capture at all, confirmed against FaceTec's own
+  // FaceTecPublicApi.d.ts JSDoc), which is why a document-only scan never led to a face prompt.
+  startIDScanThen3D2DMatch(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
   startEnrollment?(externalDatabaseRefID: string): void;
 }
 
@@ -286,6 +290,67 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     }
   }, [onError, processSessionRequest]);
 
+  /** The actual "verify this ID belongs to this person" flow: one continuous native FaceTec
+   * session that scans the document, THEN captures a live 3D face, THEN matches them — per
+   * FaceTec's own documented "Photo ID Match" product (startIDScanThen3D2DMatch). Replaces the
+   * previous two independent calls (startIDScanOnly, then a separate start3DLiveness from a
+   * different screen/session) — those were two disconnected FaceTec sessions with no matching
+   * between them at all, which is also why a document-only scan was never going to prompt for a
+   * face capture: startIDScanOnly is ID-only by design. */
+  const startIDScanWithFaceMatch = useCallback(async (): Promise<{
+    idScan: IDScanResult;
+    verification: FaceTecVerificationResult;
+    raw: Record<string, unknown>;
+  } | null> => {
+    const sdkInstance = sdkInstanceRef.current;
+    if (!sdkInstance) {
+      onError('SDK non initialisé');
+      return null;
+    }
+
+    setLoading(true);
+    sessionIdRef.current = crypto.randomUUID();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
+          onSessionRequest: processSessionRequest,
+          onFaceTecExit: (result: FaceTecSessionResult) => {
+            if (result.status === 0) {
+              resolve();
+            } else {
+              reject(new Error(`ID Scan + Face Match session exited with status: ${result.status}`));
+            }
+          },
+        };
+        sdkInstance.startIDScanThen3D2DMatch(sessionRequestProcessor);
+      });
+
+      const sessionId = sessionIdRef.current;
+      if (!sessionId) {
+        onError('Session terminée sans identifiant de session');
+        return null;
+      }
+      const result = await getSessionResult(sessionId);
+      logSdkEvent('INIT', `getSessionResult(idScan+match): success=${result.success} data=${result.data ? JSON.stringify(Object.keys(result.data)) : 'none'} error=${result.error ?? '—'}`);
+      if (result.success && result.data) {
+        const raw = result.data as Record<string, unknown>;
+        return {
+          idScan: buildIDScanResult(sessionId, raw),
+          verification: buildVerificationResult(sessionId, raw, 'match'),
+          raw,
+        };
+      }
+      onError(result.error ?? 'Résultat du scan introuvable');
+      return null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'ID Scan + Face Match failed';
+      onError(msg);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [onError, processSessionRequest]);
+
   const startEnrollment = useCallback(async (externalDatabaseRefID: string): Promise<FaceTecVerificationResult | null> => {
     const result = await startLiveness();
     if (result) {
@@ -309,6 +374,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     startLiveness,
     startEnrollment,
     startIDScanOnly,
+    startIDScanWithFaceMatch,
     sessionIdRef,
     sdkInstanceRef,
   };

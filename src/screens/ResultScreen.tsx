@@ -1,10 +1,11 @@
 import { ScanFrame } from '../components/ScanFrame';
-import type { FaceTecVerificationResult } from '../types/facetec';
+import type { FaceTecVerificationResult, IDScanResult } from '../types/facetec';
 
 interface Props {
   result: FaceTecVerificationResult;
-  matchResult?: Record<string, unknown> | null;
-  matchError?: string | null;
+  /** From the same combined ID-scan-then-face-match session as `result` — document fields for
+   * display below the scores. */
+  idScanResult?: IDScanResult | null;
   onRestart: () => void;
   /** Whether the result is still being posted to protegey-backend. */
   submitting?: boolean;
@@ -24,10 +25,10 @@ function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export function ResultScreen({ result, matchResult, matchError, onRestart, submitting, submitError, returnUrl, onReturnToPartner, onClose }: Props) {
+export function ResultScreen({ result, idScanResult, onRestart, submitting, submitError, returnUrl, onReturnToPartner, onClose }: Props) {
   const { passed, confidenceScore, livenessScore, riskFactors, deviceInfo, sessionId } = result;
-  const matchLevel = matchResult ? Number(matchResult.matchLevel ?? 0) : undefined;
-  const docData = matchResult && matchResult.documentData ? (matchResult.documentData as Record<string, unknown>) : null;
+  const matchLevel = riskFactors.matchLevel || undefined;
+  const docData = idScanResult?.documentData;
   const tone = passed ? 'success' : 'danger';
 
   return (
@@ -70,7 +71,7 @@ export function ResultScreen({ result, matchResult, matchError, onRestart, submi
           {deviceInfo?.model && <RiskRow label="Appareil" bad={false} value={deviceInfo.model} />}
         </div>
 
-        {matchResult && docData && (
+        {docData && (
           <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
             <p className="mb-3 font-display text-sm font-semibold text-ink">Document</p>
             <div className="space-y-2 text-sm">
@@ -90,7 +91,6 @@ export function ResultScreen({ result, matchResult, matchError, onRestart, submi
           </div>
         )}
 
-        {matchError && <StatusBanner tone="danger">Correspondance document : {matchError}</StatusBanner>}
         {submitting && <StatusBanner tone="accent">Enregistrement du résultat…</StatusBanner>}
         {submitError && <StatusBanner tone="danger">Le résultat n'a pas pu être enregistré ({submitError}). Réessayez ou contactez le support.</StatusBanner>}
         {!submitting && !submitError && returnUrl && <StatusBanner tone="success">Résultat enregistré avec succès.</StatusBanner>}

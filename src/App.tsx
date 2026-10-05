@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { DocumentTypeSelectScreen } from './screens/DocumentTypeSelectScreen'
 import { IDScanScreen } from './screens/IDScanScreen'
-import { LivenessScreen } from './screens/LivenessScreen'
 import { ResultScreen } from './screens/ResultScreen'
 import { FaceTecSDKLoader } from './components/FaceTecSDKLoader'
 import { EventLogPanel } from './components/EventLogPanel'
-import { match3D2DUploadedIDPhoto, setApiBase } from './services/facetecProxy'
+import { setApiBase } from './services/facetecProxy'
 import { notifyParentComplete } from './services/embedBridge'
 import { buildFaceTecResultPayload, submitFaceTecResult } from './services/backendSubmission'
 import { logSdkEvent } from './services/sdkEventLog'
@@ -46,8 +45,6 @@ export function App() {
   const [result, setResult] = useState<FaceTecVerificationResult | null>(null)
   const [sdkLoaded, setSdkLoaded] = useState(false)
   const [idScanResult, setIDScanResult] = useState<IDScanResult | null>(null)
-  const [matchResult, setMatchResult] = useState<Record<string, unknown> | null>(null)
-  const [matchError, setMatchError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -57,32 +54,19 @@ export function App() {
     setScreen('id-scan');
   };
 
-  const handleIDScanComplete = (r: IDScanResult) => {
-    setIDScanResult(r);
-    setScreen('liveness');
-  };
-
-  const handleLivenessComplete = async (r: FaceTecVerificationResult) => {
-    setResult(r);
-
-    // The real 3D:2D "does the live face match the ID photo" score comes from this call, not
-    // from the liveness-only result above — it must be captured and sent, not just displayed.
-    let match: Record<string, unknown> | null = null;
-    if (idScanResult) {
-      try {
-        const matchRes = await match3D2DUploadedIDPhoto(
-          r.sessionId,
-          idScanResult.documentData.photo ?? '',
-          10,
-        );
-        if (matchRes.success && matchRes.data) {
-          match = matchRes.data as Record<string, unknown>;
-          setMatchResult(match);
-        }
-      } catch (err) {
-        setMatchError(err instanceof Error ? err.message : 'Match failed');
-      }
-    }
+  // One continuous FaceTec session now does the document scan, the face capture, AND the 3D:2D
+  // match between them (see startIDScanWithFaceMatch in useFaceTec.ts) — so this single handler
+  // replaces what used to be two separate steps (ID scan, then an independent liveness session on
+  // its own screen with no matching between the two at all) plus a third explicit match3D2D call.
+  // `raw` is the session's own result payload, already carrying a real matchLevel — passed through
+  // to buildFaceTecResultPayload exactly where the old separate match-call response used to go.
+  const handleVerificationComplete = async (
+    idScan: IDScanResult,
+    verification: FaceTecVerificationResult,
+    raw: Record<string, unknown>,
+  ) => {
+    setIDScanResult(idScan);
+    setResult(verification);
 
     // Report straight to protegey-backend — this app has no Protegey session of its own, so the
     // one-time `token` (from the launch URL) is what authenticates this specific call instead of
@@ -92,7 +76,7 @@ export function App() {
     // for local testing) — nothing to report to.
     if (enrollmentId && token) {
       setSubmitting(true);
-      const payload = buildFaceTecResultPayload(r, idScanResult, match);
+      const payload = buildFaceTecResultPayload(verification, idScan, raw);
       const outcome = await submitFaceTecResult(apiBase, enrollmentId, token, payload);
       setSubmitError(outcome.success ? null : outcome.error ?? 'Échec de l’enregistrement du résultat');
       setSubmitting(false);
@@ -100,7 +84,7 @@ export function App() {
       // Only relevant if this app happens to be iframed rather than reached by direct navigation
       // (the primary mode) — a lightweight "done" signal, since the actual data already went to
       // the backend above, not through postMessage.
-      notifyParentComplete(enrollmentId, r.passed, parentOrigin);
+      notifyParentComplete(enrollmentId, verification.passed, parentOrigin);
     }
 
     setScreen('result');
@@ -140,8 +124,6 @@ export function App() {
   const handleRestart = () => {
     setResult(null);
     setIDScanResult(null);
-    setMatchResult(null);
-    setMatchError(null);
     setScreen('document-type-select');
   };
 
@@ -163,16 +145,8 @@ export function App() {
       {screen === 'id-scan' && (
         <IDScanScreen
           documentType={documentType}
-          onIDScanComplete={handleIDScanComplete}
+          onComplete={handleVerificationComplete}
           onBack={handleGoToDocumentSelect}
-          onError={handleError}
-        />
-      )}
-
-      {screen === 'liveness' && (
-        <LivenessScreen
-          onComplete={handleLivenessComplete}
-          onBack={() => setScreen('id-scan')}
           onError={handleError}
         />
       )}
@@ -180,8 +154,7 @@ export function App() {
       {screen === 'result' && result && (
         <ResultScreen
           result={result}
-          matchResult={matchResult}
-          matchError={matchError}
+          idScanResult={idScanResult}
           onRestart={handleRestart}
           submitting={submitting}
           submitError={submitError}

@@ -48,21 +48,19 @@ function toPercent(value: number | undefined): number | undefined {
 }
 
 /**
- * Merges every piece of data FaceTec produced across the whole flow — liveness result, ID scan,
- * and the 3D:2D match call — into one payload. Nothing FaceTec reports should be silently
- * dropped: images, every score, and the raw SDK responses for audit all travel together.
+ * Merges every piece of data FaceTec produced across the whole flow — the document scan, the face
+ * capture, and the 3D:2D match between them (one continuous session, see
+ * startIDScanWithFaceMatch in useFaceTec.ts) — into one payload. Nothing FaceTec reports should be
+ * silently dropped: images, every score, and the raw session response for audit all travel together.
  */
 export function buildFaceTecResultPayload(
   result: FaceTecVerificationResult,
   idScanResult: IDScanResult | null | undefined,
-  matchResult: Record<string, unknown> | null | undefined,
+  rawSessionResult: Record<string, unknown> | null | undefined,
 ): FaceTecResultPayload {
   const documentData = idScanResult?.documentData;
-  // The real 3D:2D match level comes from the separate match3D2DUploadedIDPhoto call
-  // (`matchResult.matchLevel`), not from the liveness-only result — fall back to whatever the
-  // verification result already carried if that call was never made or didn't return one.
-  const matchLevel = matchResult && typeof matchResult.matchLevel !== 'undefined'
-    ? Number(matchResult.matchLevel)
+  const matchLevel = rawSessionResult && typeof rawSessionResult.matchLevel !== 'undefined'
+    ? Number(rawSessionResult.matchLevel)
     : result.riskFactors.matchLevel || undefined;
 
   return {
@@ -77,12 +75,12 @@ export function buildFaceTecResultPayload(
     idDocumentNumber: documentData?.documentNumber || undefined,
     country: documentData?.issuingState || documentData?.nationality || undefined,
     riskFactors: { ...result.riskFactors },
-    // Every raw SDK response, kept verbatim for audit — liveness, ID scan (minus the huge photo
-    // field, already sent as `documentPhoto`), and the 3D:2D match call.
+    // Every raw SDK response, kept verbatim for audit — the combined session result plus the
+    // structured ID scan (minus the huge photo field, already sent as `documentPhoto`).
     rawResponse: {
-      liveness: result.rawResponse,
+      session: result.rawResponse,
       idScan: idScanResult ? { ...idScanResult, documentData: { ...idScanResult.documentData, photo: undefined } } : undefined,
-      match: matchResult ?? undefined,
+      match: rawSessionResult ?? undefined,
     },
   };
 }

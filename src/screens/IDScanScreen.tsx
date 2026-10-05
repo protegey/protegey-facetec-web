@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
-import type { DocumentType, IDScanResult } from '../types/facetec';
+import type { DocumentType, IDScanResult, FaceTecVerificationResult } from '../types/facetec';
 import { PageShell } from '../components/PageShell';
 import { StepIndicator } from '../components/StepIndicator';
 import { ScanFrame } from '../components/ScanFrame';
@@ -9,7 +9,9 @@ import { logSdkEvent } from '../services/sdkEventLog';
 
 interface Props {
   documentType: DocumentType;
-  onIDScanComplete: (result: IDScanResult) => void;
+  // One continuous FaceTec session now covers the document scan AND the face match — see
+  // startIDScanWithFaceMatch in useFaceTec.ts — so completion always carries both results at once.
+  onComplete: (idScan: IDScanResult, verification: FaceTecVerificationResult, raw: Record<string, unknown>) => void;
   onBack: () => void;
   onError: (error: string) => void;
 }
@@ -17,19 +19,19 @@ interface Props {
 const COPY: Record<DocumentType, { title: string; description: string; captureLabel: string; icon: typeof IdCardIcon }> = {
   cni: {
     title: 'Scannez votre carte d’identité',
-    description: 'Présentez le recto, puis le verso — bien à plat, dans le cadre, sous un bon éclairage.',
-    captureLabel: 'Démarrer le scan',
+    description: 'Présentez le recto, puis le verso, puis votre visage pour vérifier la correspondance — bien à plat, dans le cadre, sous un bon éclairage.',
+    captureLabel: 'Démarrer la vérification',
     icon: IdCardIcon,
   },
   passport: {
     title: 'Scannez votre passeport',
-    description: 'Présentez la page principale (photo et informations), bien à plat, dans le cadre.',
-    captureLabel: 'Démarrer le scan',
+    description: 'Présentez la page principale (photo et informations), puis votre visage pour vérifier la correspondance — bien à plat, dans le cadre.',
+    captureLabel: 'Démarrer la vérification',
     icon: PassportIcon,
   },
 };
 
-export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }: Props) {
+export function IDScanScreen({ documentType, onComplete, onBack, onError }: Props) {
   const copy = COPY[documentType];
   const Icon = copy.icon;
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
   // full "Démarrer le scan" screen has no reason to flash on screen first every single time.
   const [starting, setStarting] = useState(true);
 
-  const { initializeFaceTec, startIDScanOnly, loading } = useFaceTec({
+  const { initializeFaceTec, startIDScanWithFaceMatch, loading } = useFaceTec({
     verificationType: 'match',
     onError,
   });
@@ -47,7 +49,7 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
   const autoStarted = useRef(false);
 
   const handleStartIDScan = async () => {
-    if (error) logSdkEvent('FV_RETRY', 'Nouvelle tentative de scan du document');
+    if (error) logSdkEvent('FV_RETRY', 'Nouvelle tentative de vérification');
     setProcessing(true);
     setError(null);
 
@@ -59,15 +61,15 @@ export function IDScanScreen({ documentType, onIDScanComplete, onBack, onError }
         setStarting(false);
         return;
       }
-      const result = await startIDScanOnly();
+      const result = await startIDScanWithFaceMatch();
       if (result) {
-        logSdkEvent('CAPTURE_DONE', 'Scan du document terminé');
-        onIDScanComplete(result);
+        logSdkEvent('CAPTURE_DONE', 'Scan du document et du visage terminé');
+        onComplete(result.idScan, result.verification, result.raw);
       } else {
         setStarting(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Échec du scan du document');
+      setError(err instanceof Error ? err.message : 'Échec de la vérification');
       setStarting(false);
     } finally {
       setProcessing(false);
