@@ -38,7 +38,7 @@ async function proxyRequest<T>(
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Request failed' }));
-      return { success: false, error: err.message ?? 'FaceTec proxy request failed' };
+      return { success: false, error: err.message ?? 'La requête SDK a échoué' };
     }
 
     const data = await res.json();

@@ -123,7 +123,7 @@ export function App() {
   };
 
   const handleError = (_error: string) => {
-    console.error('FaceTec Error:', _error);
+    console.error('SDK Error:', _error);
     // Every onError(...) across the app (SDK load, init, capture) funnels through here — this is
     // the only way to see the real failure reason on a device with no attached devtools (e.g.
     // inside a mobile app's WebView), via the event panel's ✦ button.

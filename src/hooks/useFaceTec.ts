@@ -91,7 +91,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
         };
         doProcess().finally(() => setLoading(false));
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to process FaceTec session';
+        const msg = err instanceof Error ? err.message : 'Échec du traitement de la session';
         onError(msg);
         requestCallback.abortOnCatastrophicError();
         setLoading(false);
@@ -103,7 +103,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   const initializeFaceTec = useCallback((): Promise<boolean> => {
     return new Promise((resolve) => {
       if (!window.FaceTecSDK) {
-        onError('FaceTec SDK not loaded');
+        onError('SDK non chargé');
         resolve(false);
         return;
       }
@@ -122,7 +122,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
         onSessionRequest: processSessionRequest,
         onFaceTecExit: (result: FaceTecSessionResult) => {
-          onError(`FaceTec session exited with status: ${result.status}`);
+          onError(`Session interrompue (code ${result.status})`);
         },
       };
 
@@ -137,7 +137,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
           resolve(true);
         },
         onError: (error: number) => {
-          onError(`FaceTec initialization failed with error code: ${error}`);
+          onError(`Échec de l'initialisation du SDK (code ${error})`);
           resolve(false);
         },
       };
@@ -165,7 +165,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     // between. `initialized` (state) would still read stale/false at this point since React hasn't
     // re-rendered yet; `sdkInstanceRef` (a ref) is the only signal that's actually up to date here.
     if (!sdkInstance) {
-      onError('FaceTec SDK not initialized');
+      onError('SDK non initialisé');
       return null;
     }
 
@@ -208,7 +208,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     // See the matching comment in startLiveness — same stale-closure reason for not checking
     // `initialized` here.
     if (!sdkInstance) {
-      onError('FaceTec SDK not initialized');
+      onError('SDK non initialisé');
       return null;
     }
 

@@ -21,7 +21,7 @@ export function FaceTecSDKLoader({ onSDKLoaded, onError }: FaceTecSDKLoaderProps
 
   useEffect(() => {
     let cancelled = false;
-    logSdkEvent('INIT', 'Chargement du SDK Device FaceTec…');
+    logSdkEvent('INIT', 'Chargement du SDK…');
 
     const sdkScript = document.createElement('script');
     sdkScript.src = '/core-sdk/main.js';
@@ -33,7 +33,7 @@ export function FaceTecSDKLoader({ onSDKLoaded, onError }: FaceTecSDKLoaderProps
       if (!navigator.mediaDevices?.getUserMedia) {
         setState('error-unsupported');
         logSdkEvent('ERROR', 'Appareil non compatible — aucun accès caméra disponible');
-        onError('Device does not support camera access');
+        onError('Appareil non compatible — aucun accès caméra disponible');
         return;
       }
 
@@ -49,15 +49,15 @@ export function FaceTecSDKLoader({ onSDKLoaded, onError }: FaceTecSDKLoaderProps
         if (cancelled) return;
         setState('error-camera-denied');
         logSdkEvent('ERROR', 'Accès caméra refusé par l’utilisateur');
-        onError('Camera permission denied');
+        onError('Accès caméra refusé par l’utilisateur');
       }
     };
 
     sdkScript.onerror = () => {
       if (cancelled) return;
       setState('error-sdk');
-      logSdkEvent('ERROR', 'Échec du chargement du SDK FaceTec');
-      onError('FaceTec SDK failed to load');
+      logSdkEvent('ERROR', 'Échec du chargement du SDK');
+      onError('Échec du chargement du SDK');
     };
 
     document.body.appendChild(sdkScript);

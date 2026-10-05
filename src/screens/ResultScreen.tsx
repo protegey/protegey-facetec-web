@@ -49,7 +49,7 @@ export function ResultScreen({ result, matchResult, matchError, onRestart, submi
         </div>
 
         <div className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-warn/30 bg-warn-dim px-3 py-2 text-xs text-warn">
-          Mode test FaceTec — résultats issus de l'API de test, en attendant l'accès au Server SDK de production
+          Mode test — résultats issus de l'API de test, en attendant l'accès en production
         </div>
 
         <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
