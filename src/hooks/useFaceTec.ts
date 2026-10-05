@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { FaceTecVerificationResult, VerificationType, IDScanResult } from '../types/facetec';
-import { requestFaceTecProcessing, getSessionResult } from '../services/facetecProxy';
+import { requestFaceTecProcessing } from '../services/facetecProxy';
 import { applyProtegeyFaceTecTheme } from '../services/faceTecTheme';
 import { faceTecFrenchStrings } from '../services/faceTecLocalization';
 import { faceTecOcrLocalizationFr } from '../services/faceTecOcrLocalization';
@@ -72,10 +72,15 @@ interface FaceTecInitializeCallback {
 interface FaceTecSDKInstance {
   start3DLiveness(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
   startIDScanOnly(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
-  // The one-session "scan the document, then scan the face, then match them" flow — startIDScanOnly
+  // The one-session "scan the face, then scan the document, then match them" flow — startIDScanOnly
   // is literally ID-only (no face capture at all, confirmed against FaceTec's own
   // FaceTecPublicApi.d.ts JSDoc), which is why a document-only scan never led to a face prompt.
-  startIDScanThen3D2DMatch(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
+  // NOT startIDScanThen3D2DMatch — tried that first, but FaceTec's real server rejected it with
+  // "requires an already enrolled 3D FaceMap, but one was not provided" (confirmed in backend
+  // logs): that method matches the ID against a FaceMap enrolled in a SEPARATE prior session, it
+  // doesn't capture one itself. start3DLivenessThen3D2DPhotoIDMatch captures the face live, in
+  // this same session, which is what lets it work with no pre-enrollment step at all.
+  start3DLivenessThen3D2DPhotoIDMatch(sessionRequestProcessor: FaceTecSessionRequestProcessor): void;
   startEnrollment?(externalDatabaseRefID: string): void;
 }
 
@@ -84,6 +89,12 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   const [initialized, setInitialized] = useState(false);
   const sdkInstanceRef = useRef<FaceTecSDKInstance | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  // FaceTec's Testing API has no /session-result/{id} endpoint (confirmed: their own server
+  // returns 404 "No route found" for it) — the real final result arrives INLINE, in the `result`
+  // field of whichever process-request response concludes the session (confirmed against
+  // FaceTec's own sample app, SampleAppNetworkingRequest.ts). processSessionRequest below captures
+  // it here as it comes in; start*() reads it once the native session has exited successfully.
+  const latestSessionResultRef = useRef<Record<string, unknown> | null>(null);
 
   const processSessionRequest = useCallback(
     (requestBlob: string, requestCallback: FaceTecSessionRequestProcessorCallback): void => {
@@ -91,17 +102,14 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       try {
         const doProcess = async () => {
           // sessionIdRef.current is set right before the native session starts (see startLiveness
-          // / startIDScanOnly) and forwarded as externalDatabaseRefID on every request of the
-          // session — FaceTec's Device SDK automatically re-sends whatever we pass here on every
-          // subsequent request within the same session, so this is also what later identifies the
-          // session to getSessionResult() once it's done.
+          // / startIDScanOnly / startIDScanWithFaceMatch) and forwarded as externalDatabaseRefID on
+          // every request of the session.
           const result = await requestFaceTecProcessing(requestBlob, verificationType, sessionIdRef.current ?? undefined);
-          // Diagnostic: FaceTec's own sample app's response type includes an optional `result`
-          // object carrying the final OCR/scan data INLINE on some responses (not via a separate
-          // lookup) — logging every response's real top-level keys here to see whether that's
-          // actually happening, since getSessionResult() afterwards has been coming back empty.
           if (result.data) {
             logSdkEvent('INIT', `process-request keys: ${JSON.stringify(Object.keys(result.data))}`);
+            if (result.data.result) {
+              latestSessionResultRef.current = result.data.result;
+            }
           }
           if (result.success && result.data) {
             requestCallback.processResponse(result.data.responseBlob);
@@ -195,9 +203,9 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     // the vendored FaceTecPublicApi.d.ts — FaceTecSessionResult only carries `status`) — generating
     // our own and passing it as externalDatabaseRefID on every request (see processSessionRequest)
     // is the documented way to give the session a stable ID, since FaceTec's Device SDK echoes it
-    // back on every subsequent request of the same session. This is what getSessionResult() below
-    // actually looks up afterwards.
+    // back on every subsequent request of the same session.
     sessionIdRef.current = crypto.randomUUID();
+    latestSessionResultRef.current = null;
     try {
       await new Promise<void>((resolve, reject) => {
         const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
@@ -214,21 +222,12 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       });
 
       const sessionId = sessionIdRef.current;
-      if (!sessionId) {
-        onError('Session de contrôle facial terminée sans identifiant de session');
+      const raw = latestSessionResultRef.current;
+      if (!sessionId || !raw) {
+        onError('Contrôle facial terminé sans résultat final');
         return null;
       }
-      const result = await getSessionResult(sessionId);
-      logSdkEvent('INIT', `getSessionResult(liveness): success=${result.success} data=${result.data ? JSON.stringify(Object.keys(result.data)) : 'none'} error=${result.error ?? '—'}`);
-      if (result.success && result.data) {
-        const raw = result.data as Record<string, unknown>;
-        return buildVerificationResult(sessionId, raw, 'liveness');
-      }
-      // Previously fell through to a silent `return null` here — the native capture had already
-      // succeeded (we're past onFaceTecExit), so this failure is specifically the result lookup,
-      // and swallowing it looked identical on screen to nothing having happened at all.
-      onError(result.error ?? 'Résultat du contrôle facial introuvable');
-      return null;
+      return buildVerificationResult(sessionId, raw, 'liveness');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Liveness check failed';
       onError(msg);
@@ -250,6 +249,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     setLoading(true);
     // See the matching comment in startLiveness — same reason for generating our own ID here.
     sessionIdRef.current = crypto.randomUUID();
+    latestSessionResultRef.current = null;
     try {
       await new Promise<void>((resolve, reject) => {
         const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
@@ -266,21 +266,12 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       });
 
       const sessionId = sessionIdRef.current;
-      if (!sessionId) {
-        onError('Scan du document terminé sans identifiant de session');
+      const raw = latestSessionResultRef.current;
+      if (!sessionId || !raw) {
+        onError('Scan du document terminé sans résultat final');
         return null;
       }
-      const result = await getSessionResult(sessionId);
-      logSdkEvent('INIT', `getSessionResult(idScan): success=${result.success} data=${result.data ? JSON.stringify(Object.keys(result.data)) : 'none'} error=${result.error ?? '—'}`);
-      if (result.success && result.data) {
-        const raw = result.data as Record<string, unknown>;
-        return buildIDScanResult(sessionId, raw);
-      }
-      // Previously fell through to a silent `return null` here — the native capture had already
-      // succeeded (we're past onFaceTecExit), so this failure is specifically the result lookup,
-      // and swallowing it looked identical on screen to nothing having happened at all.
-      onError(result.error ?? 'Résultat du scan de document introuvable');
-      return null;
+      return buildIDScanResult(sessionId, raw);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'ID Scan failed';
       onError(msg);
@@ -291,12 +282,14 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   }, [onError, processSessionRequest]);
 
   /** The actual "verify this ID belongs to this person" flow: one continuous native FaceTec
-   * session that scans the document, THEN captures a live 3D face, THEN matches them — per
-   * FaceTec's own documented "Photo ID Match" product (startIDScanThen3D2DMatch). Replaces the
-   * previous two independent calls (startIDScanOnly, then a separate start3DLiveness from a
-   * different screen/session) — those were two disconnected FaceTec sessions with no matching
-   * between them at all, which is also why a document-only scan was never going to prompt for a
-   * face capture: startIDScanOnly is ID-only by design. */
+   * session that captures a live 3D face, THEN scans the document, THEN matches them — per
+   * FaceTec's start3DLivenessThen3D2DPhotoIDMatch. Replaces the previous two independent calls
+   * (startIDScanOnly, then a separate start3DLiveness from a different screen/session) — those
+   * were two disconnected FaceTec sessions with no matching between them at all, which is also why
+   * a document-only scan was never going to prompt for a face capture: startIDScanOnly is ID-only
+   * by design. (startIDScanThen3D2DMatch looked like the right name but actually expects a 3D
+   * FaceMap already enrolled in a SEPARATE prior session — FaceTec's real server rejects it
+   * otherwise with "requires an already enrolled 3D FaceMap, but one was not provided".) */
   const startIDScanWithFaceMatch = useCallback(async (): Promise<{
     idScan: IDScanResult;
     verification: FaceTecVerificationResult;
@@ -310,6 +303,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
 
     setLoading(true);
     sessionIdRef.current = crypto.randomUUID();
+    latestSessionResultRef.current = null;
     try {
       await new Promise<void>((resolve, reject) => {
         const sessionRequestProcessor: FaceTecSessionRequestProcessor = {
@@ -322,26 +316,20 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
             }
           },
         };
-        sdkInstance.startIDScanThen3D2DMatch(sessionRequestProcessor);
+        sdkInstance.start3DLivenessThen3D2DPhotoIDMatch(sessionRequestProcessor);
       });
 
       const sessionId = sessionIdRef.current;
-      if (!sessionId) {
-        onError('Session terminée sans identifiant de session');
+      const raw = latestSessionResultRef.current;
+      if (!sessionId || !raw) {
+        onError('Vérification terminée sans résultat final');
         return null;
       }
-      const result = await getSessionResult(sessionId);
-      logSdkEvent('INIT', `getSessionResult(idScan+match): success=${result.success} data=${result.data ? JSON.stringify(Object.keys(result.data)) : 'none'} error=${result.error ?? '—'}`);
-      if (result.success && result.data) {
-        const raw = result.data as Record<string, unknown>;
-        return {
-          idScan: buildIDScanResult(sessionId, raw),
-          verification: buildVerificationResult(sessionId, raw, 'match'),
-          raw,
-        };
-      }
-      onError(result.error ?? 'Résultat du scan introuvable');
-      return null;
+      return {
+        idScan: buildIDScanResult(sessionId, raw),
+        verification: buildVerificationResult(sessionId, raw, 'match'),
+        raw,
+      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'ID Scan + Face Match failed';
       onError(msg);

@@ -55,16 +55,16 @@ export async function requestFaceTecProcessing(
   sessionRequestBlob: string,
   verificationType: string,
   externalDatabaseRefID?: string,
-): Promise<ProxyResponse<{ responseBlob: string }>> {
+  // `result` carries the final liveness/match/OCR data inline on whichever request concludes the
+  // session — confirmed against FaceTec's own sample app (SampleAppNetworkingRequest.ts), and the
+  // only real path to the final result: FaceTec's Testing API has no /session-result/{id} route
+  // (confirmed 404 "No route found" from their own server — that endpoint never existed).
+): Promise<ProxyResponse<{ responseBlob: string; result?: Record<string, unknown> }>> {
   return proxyRequest('face-process', {
     sessionRequestBlob,
     verificationType,
     externalDatabaseRefID,
   });
-}
-
-export async function getSessionResult(sessionId: string): Promise<ProxyResponse<Record<string, unknown>>> {
-  return proxyRequest('face-session-result', { sessionId });
 }
 
 export async function enrollUser(
