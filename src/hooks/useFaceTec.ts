@@ -4,6 +4,7 @@ import { requestFaceTecProcessing, getSessionResult } from '../services/facetecP
 import { applyProtegeyFaceTecTheme } from '../services/faceTecTheme';
 import { faceTecFrenchStrings } from '../services/faceTecLocalization';
 import { faceTecOcrLocalizationFr } from '../services/faceTecOcrLocalization';
+import { logSdkEvent } from '../services/sdkEventLog';
 
 interface UseFaceTecOptions {
   verificationType: VerificationType;
@@ -91,6 +92,13 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
           // subsequent request within the same session, so this is also what later identifies the
           // session to getSessionResult() once it's done.
           const result = await requestFaceTecProcessing(requestBlob, verificationType, sessionIdRef.current ?? undefined);
+          // Diagnostic: FaceTec's own sample app's response type includes an optional `result`
+          // object carrying the final OCR/scan data INLINE on some responses (not via a separate
+          // lookup) — logging every response's real top-level keys here to see whether that's
+          // actually happening, since getSessionResult() afterwards has been coming back empty.
+          if (result.data) {
+            logSdkEvent('INIT', `process-request keys: ${JSON.stringify(Object.keys(result.data))}`);
+          }
           if (result.success && result.data) {
             requestCallback.processResponse(result.data.responseBlob);
           } else {
@@ -202,13 +210,20 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       });
 
       const sessionId = sessionIdRef.current;
-      if (sessionId) {
-        const result = await getSessionResult(sessionId);
-        if (result.success && result.data) {
-          const raw = result.data as Record<string, unknown>;
-          return buildVerificationResult(sessionId, raw, 'liveness');
-        }
+      if (!sessionId) {
+        onError('Session de contrôle facial terminée sans identifiant de session');
+        return null;
       }
+      const result = await getSessionResult(sessionId);
+      logSdkEvent('INIT', `getSessionResult(liveness): success=${result.success} data=${result.data ? JSON.stringify(Object.keys(result.data)) : 'none'} error=${result.error ?? '—'}`);
+      if (result.success && result.data) {
+        const raw = result.data as Record<string, unknown>;
+        return buildVerificationResult(sessionId, raw, 'liveness');
+      }
+      // Previously fell through to a silent `return null` here — the native capture had already
+      // succeeded (we're past onFaceTecExit), so this failure is specifically the result lookup,
+      // and swallowing it looked identical on screen to nothing having happened at all.
+      onError(result.error ?? 'Résultat du contrôle facial introuvable');
       return null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Liveness check failed';
@@ -247,13 +262,20 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       });
 
       const sessionId = sessionIdRef.current;
-      if (sessionId) {
-        const result = await getSessionResult(sessionId);
-        if (result.success && result.data) {
-          const raw = result.data as Record<string, unknown>;
-          return buildIDScanResult(sessionId, raw);
-        }
+      if (!sessionId) {
+        onError('Scan du document terminé sans identifiant de session');
+        return null;
       }
+      const result = await getSessionResult(sessionId);
+      logSdkEvent('INIT', `getSessionResult(idScan): success=${result.success} data=${result.data ? JSON.stringify(Object.keys(result.data)) : 'none'} error=${result.error ?? '—'}`);
+      if (result.success && result.data) {
+        const raw = result.data as Record<string, unknown>;
+        return buildIDScanResult(sessionId, raw);
+      }
+      // Previously fell through to a silent `return null` here — the native capture had already
+      // succeeded (we're past onFaceTecExit), so this failure is specifically the result lookup,
+      // and swallowing it looked identical on screen to nothing having happened at all.
+      onError(result.error ?? 'Résultat du scan de document introuvable');
       return null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'ID Scan failed';
