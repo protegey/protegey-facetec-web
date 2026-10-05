@@ -8,6 +8,7 @@ import { EventLogPanel } from './components/EventLogPanel'
 import { match3D2DUploadedIDPhoto, setApiBase } from './services/facetecProxy'
 import { notifyParentComplete } from './services/embedBridge'
 import { buildFaceTecResultPayload, submitFaceTecResult } from './services/backendSubmission'
+import { logSdkEvent } from './services/sdkEventLog'
 import type { VerificationStep, FaceTecVerificationResult, IDScanResult, DocumentType } from './types/facetec'
 
 // ── Launch params ─────────────────────────────────────────────────────────
@@ -123,6 +124,10 @@ export function App() {
 
   const handleError = (_error: string) => {
     console.error('FaceTec Error:', _error);
+    // Every onError(...) across the app (SDK load, init, capture) funnels through here — this is
+    // the only way to see the real failure reason on a device with no attached devtools (e.g.
+    // inside a mobile app's WebView), via the event panel's ✦ button.
+    logSdkEvent('ERROR', _error);
   };
 
   const handleRestart = () => {
@@ -145,7 +150,7 @@ export function App() {
       )}
 
       {screen === 'document-type-select' && (
-        <DocumentTypeSelectScreen onSelect={handleDocumentTypeSelect} />
+        <DocumentTypeSelectScreen onSelect={handleDocumentTypeSelect} sdkReady={sdkLoaded} />
       )}
 
       {screen === 'id-scan' && (
