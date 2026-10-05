@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { FaceTecVerificationResult, VerificationType, IDScanResult } from '../types/facetec';
 import { requestFaceTecProcessing, getSessionResult } from '../services/facetecProxy';
 import { applyProtegeyFaceTecTheme } from '../services/faceTecTheme';
+import { faceTecFrenchStrings } from '../services/faceTecLocalization';
 
 interface UseFaceTecOptions {
   verificationType: VerificationType;
@@ -39,6 +40,7 @@ declare global {
       deinitialize: (callback: () => void) => void;
       FaceTecCustomization: new () => FaceTecCustomizationInstance;
       setCustomization: (customization: FaceTecCustomizationInstance) => void;
+      configureLocalization: (localizationJSON: Record<string, string>) => void;
     };
   }
 }
@@ -127,6 +129,10 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       const initializeCallback: FaceTecInitializeCallback = {
         onSuccess: (sdkInstance: FaceTecSDKInstance) => {
           sdkInstanceRef.current = sdkInstance;
+          // Must run AFTER a successful init per FaceTec's own docs (unlike setCustomization,
+          // which runs before) — this is what actually translates the live capture screen's
+          // instruction text ("Scan Front of ID" etc.) into French.
+          window.FaceTecSDK?.configureLocalization(faceTecFrenchStrings);
           setInitialized(true);
           resolve(true);
         },
