@@ -397,13 +397,25 @@ function buildVerificationResult(
   const device = (raw.deviceInfo ?? {}) as Record<string, unknown>;
   const livenessProbability = Number(faceScan.livenessProbability ?? faceScan.probability ?? 0);
   const matchLevel = Number(raw.matchLevel ?? 0);
+  // FaceTec's own matchLevel scale: 0 means no match (fail); any level above 0 is a genuine
+  // successful match, the number just says how strict a threshold it cleared (e.g. Match Level 7
+  // ≈ 1-in-500,000 false-accept rate) — confirmed against FaceTec's own published match-level
+  // table. This used to be divided by 10 and treated as a 0-1 confidence fraction requiring 0.85+
+  // to "pass" — effectively demanding Match Level 8.5+, which silently declined perfectly good
+  // matches (a real Match Level 7 — checkmarked as a pass on FaceTec's own dashboard — scored
+  // 0.7 under that formula and got rejected). The match itself already encodes pass/fail; a
+  // completed start3DLivenessThen3D2DPhotoIDMatch session reaching this point has already had its
+  // liveness verified by FaceTec as a prerequisite of the flow, so matchLevel alone decides it.
   const confidence = type === 'enrollment' || type === 'liveness'
     ? livenessProbability
-    : matchLevel / 10;
+    : Math.min(1, matchLevel / 10);
+  const passed = type === 'enrollment' || type === 'liveness'
+    ? livenessProbability >= 0.85
+    : matchLevel > 0;
 
   return {
     sessionId,
-    passed: livenessProbability >= 0.85 && confidence >= 0.85,
+    passed,
     confidenceScore: Math.round(Math.min(1, Math.max(0, confidence)) * 10000) / 10000,
     livenessScore: livenessProbability,
     matchScore: type !== 'liveness' ? Math.round(confidence * 100) / 100 : undefined,
