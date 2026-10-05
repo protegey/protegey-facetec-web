@@ -84,6 +84,30 @@ interface FaceTecSDKInstance {
   startEnrollment?(externalDatabaseRefID: string): void;
 }
 
+// Diagnostic: checking whether FaceTec's real fraud/tampering signals (as opposed to the
+// "Overall Quality" retry flag shown in their dashboard, which is just a UX signal — their SDK
+// already forces a retry on quality issues before letting the session conclude, so a completed
+// session has already cleared that) are actually present in what our Testing API integration
+// receives. These field names are documented for Fraud List Search / Account Deduplication /
+// Anti-Tampering, but those are separate FaceTec features that may need enabling on the account
+// and may only ship through the full production Server SDK rather than the Testing API sandbox —
+// logging here is how we find out, instead of guessing. Also dumps additionalSessionData in full,
+// since that's the most likely place any of these would live if present at all.
+const FRAUD_SIGNAL_KEYS = ['isLikelyOnFraudList', 'isLikelyDuplicate', 'CannotConfirmIDIsAuthentic', 'LikelyOriginalText'];
+function logFraudSignals(result: Record<string, unknown>): void {
+  const found: Record<string, unknown> = {};
+  for (const key of FRAUD_SIGNAL_KEYS) {
+    if (key in result) found[key] = result[key];
+  }
+  logSdkEvent(
+    'INIT',
+    `fraud signals: ${Object.keys(found).length ? JSON.stringify(found) : 'none of ' + FRAUD_SIGNAL_KEYS.join(', ') + ' present'}`,
+  );
+  if (result.additionalSessionData) {
+    logSdkEvent('INIT', `additionalSessionData: ${JSON.stringify(result.additionalSessionData)}`);
+  }
+}
+
 export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
@@ -109,6 +133,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
             logSdkEvent('INIT', `process-request keys: ${JSON.stringify(Object.keys(result.data))}`);
             if (result.data.result) {
               latestSessionResultRef.current = result.data.result;
+              logFraudSignals(result.data.result);
             }
           }
           if (result.success && result.data) {
