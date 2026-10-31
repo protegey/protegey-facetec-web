@@ -12,7 +12,7 @@ interface UseFaceTecOptions {
 }
 
 /** Loosely typed on purpose — these mirror FaceTec's own FaceTecCustomization.d.ts (vendored
- * under FaceTecSDK-browser-10.1.18/, not an importable package), so re-declaring every property
+ * under FaceTecSDK-browser-10.1.25/, not an importable package), so re-declaring every property
  * here would just be a second, easily-stale copy of their types. Each nested object's real
  * properties are documented at the single call site that sets them (faceTecTheme.ts). */
 type FaceTecCustomizationSection = Record<string, string | number | boolean>;
@@ -205,7 +205,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
       applyProtegeyFaceTecTheme();
 
       window.FaceTecSDK.initializeWithSessionRequest(
-        import.meta.env.VITE_FACE_TEC_DEVICE_KEY ?? 'dlrL00OosNJyky981KCeSVtVW63vPvtM',
+        import.meta.env.VITE_FACE_TEC_DEVICE_KEY ?? 'd086XGqbGS6UqnocWnCkH1B0LKgzcCX1',
         sessionRequestProcessor,
         initializeCallback,
       );

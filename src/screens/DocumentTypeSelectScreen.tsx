@@ -6,6 +6,7 @@ import type { DocumentType } from '../types/facetec';
 
 interface Props {
   onSelect: (type: DocumentType) => void;
+  logoUrl?: string | null;
 }
 
 const DOCUMENT_OPTIONS: { type: DocumentType; label: string; hint: string; icon: typeof IdCardIcon }[] = [
@@ -13,7 +14,7 @@ const DOCUMENT_OPTIONS: { type: DocumentType; label: string; hint: string; icon:
   { type: 'passport', label: 'Passeport', hint: 'Page principale uniquement', icon: PassportIcon },
 ];
 
-export function DocumentTypeSelectScreen({ onSelect }: Props) {
+export function DocumentTypeSelectScreen({ onSelect, logoUrl }: Props) {
   const [selected, setSelected] = useState<DocumentType | null>(null);
 
   return (
@@ -21,6 +22,7 @@ export function DocumentTypeSelectScreen({ onSelect }: Props) {
       title="Quel document ?"
       description="Choisissez le document que vous allez présenter à la caméra."
       rail={<StepIndicator steps={[{ label: 'Document' }, { label: 'Visage' }, { label: 'Résultat' }]} currentStep={1} />}
+      logoUrl={logoUrl}
     >
       <div className="grid grid-cols-2 gap-3">
         {DOCUMENT_OPTIONS.map((option) => {

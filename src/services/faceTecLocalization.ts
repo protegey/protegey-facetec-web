@@ -1,5 +1,5 @@
 // FaceTec's own official French translations, copied verbatim from the vendored SDK's
-// FaceTecSDK-browser-10.1.18/core-sdk-optional/FaceTecStrings.fr.js (FaceTec ships one of these
+// FaceTecSDK-browser-10.1.25/core-sdk-optional/FaceTecStrings.fr.js (FaceTec ships one of these
 // per supported language). This is the only way to change the wording FaceTec's native screens
 // show during live capture ("Scan Front of ID" etc.) — there's no API to inject brand-new custom
 // text, only to override FaceTec's own string keys via configureLocalization().

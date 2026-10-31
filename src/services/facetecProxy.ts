@@ -1,5 +1,5 @@
 let API_BASE = import.meta.env.VITE_API_BASE ?? '/api/v1';
-const FACE_TEC_DEVICE_KEY = import.meta.env.VITE_FACE_TEC_DEVICE_KEY ?? 'dlrL00OosNJyky981KCeSVtVW63vPvtM';
+const FACE_TEC_DEVICE_KEY = import.meta.env.VITE_FACE_TEC_DEVICE_KEY ?? 'd086XGqbGS6UqnocWnCkH1B0LKgzcCX1';
 
 /**
  * Overrides the API base used for the (unauthenticated) FaceTec Testing-API

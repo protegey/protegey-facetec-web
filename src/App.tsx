@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DocumentTypeSelectScreen } from './screens/DocumentTypeSelectScreen'
 import { IDScanScreen } from './screens/IDScanScreen'
 import { ResultScreen } from './screens/ResultScreen'
@@ -7,6 +7,7 @@ import { EventLogPanel } from './components/EventLogPanel'
 import { setApiBase } from './services/facetecProxy'
 import { notifyParentComplete } from './services/embedBridge'
 import { buildFaceTecResultPayload, submitFaceTecResult } from './services/backendSubmission'
+import { fetchPartnerLogoUrl } from './services/branding'
 import { logSdkEvent } from './services/sdkEventLog'
 import type { VerificationStep, FaceTecVerificationResult, IDScanResult, DocumentType } from './types/facetec'
 
@@ -41,6 +42,15 @@ function readLaunchParams() {
 export function App() {
   const [{ enrollmentId, token, returnUrl, parentOrigin, apiBase }] = useState(readLaunchParams)
   const [screen, setScreen] = useState<VerificationStep>('document-type-select')
+  // Fetched once at launch, same lifetime as the launch params above — stays null (PageShell's
+  // own Protegey-default fallback) whenever there's no enrollment context at all, no logo
+  // uploaded for that partner, or the fetch simply fails; see branding.ts.
+  const [partnerLogoUrl, setPartnerLogoUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!enrollmentId || !token) return
+    fetchPartnerLogoUrl(apiBase, enrollmentId, token).then(setPartnerLogoUrl)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- launch params are read once (see readLaunchParams) and never change for the life of this tab
+  }, [])
   const [documentType, setDocumentType] = useState<DocumentType>('cni')
   const [result, setResult] = useState<FaceTecVerificationResult | null>(null)
   const [sdkLoaded, setSdkLoaded] = useState(false)
@@ -139,7 +149,7 @@ export function App() {
       )}
 
       {sdkLoaded && screen === 'document-type-select' && (
-        <DocumentTypeSelectScreen onSelect={handleDocumentTypeSelect} />
+        <DocumentTypeSelectScreen onSelect={handleDocumentTypeSelect} logoUrl={partnerLogoUrl} />
       )}
 
       {screen === 'id-scan' && (
@@ -148,6 +158,7 @@ export function App() {
           onComplete={handleVerificationComplete}
           onBack={handleGoToDocumentSelect}
           onError={handleError}
+          logoUrl={partnerLogoUrl}
         />
       )}
 

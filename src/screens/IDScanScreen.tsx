@@ -14,6 +14,7 @@ interface Props {
   onComplete: (idScan: IDScanResult, verification: FaceTecVerificationResult, raw: Record<string, unknown>) => void;
   onBack: () => void;
   onError: (error: string) => void;
+  logoUrl?: string | null;
 }
 
 const COPY: Record<DocumentType, { title: string; description: string; captureLabel: string; icon: typeof IdCardIcon }> = {
@@ -31,7 +32,7 @@ const COPY: Record<DocumentType, { title: string; description: string; captureLa
   },
 };
 
-export function IDScanScreen({ documentType, onComplete, onBack, onError }: Props) {
+export function IDScanScreen({ documentType, onComplete, onBack, onError, logoUrl }: Props) {
   const copy = COPY[documentType];
   const Icon = copy.icon;
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +112,7 @@ export function IDScanScreen({ documentType, onComplete, onBack, onError }: Prop
       title={copy.title}
       description={copy.description}
       rail={<StepIndicator steps={[{ label: 'Document' }, { label: 'Visage' }, { label: 'Résultat' }]} currentStep={1} />}
+      logoUrl={logoUrl}
     >
       <ScanFrame active={processing} tone={error ? 'danger' : 'accent'} shape="rect">
         <Icon />

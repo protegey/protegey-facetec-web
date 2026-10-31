@@ -3,7 +3,7 @@
 // the user to check). `fieldKey`/`groupKey` are FaceTec's own internal identifiers, left as-is;
 // only the user-facing `groupFriendlyName`/`fieldFriendlyName`/`uiFieldDescriptionText` strings
 // are translated. Structure copied from the vendored SDK's own template at
-// FaceTecSDK-browser-10.1.18/sample-app-resources/FaceTec_OCR_Customization.json — every group and
+// FaceTecSDK-browser-10.1.25/sample-app-resources/FaceTec_OCR_Customization.json — every group and
 // field FaceTec supports, translated, so no field silently falls back to English regardless of
 // which document type/field combination FaceTec actually OCR's off a given ID.
 export const faceTecOcrLocalizationFr = {

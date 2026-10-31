@@ -8,11 +8,17 @@ interface PageShellProps {
   children: ReactNode;
   /** Renders the flow rail above the title — only the three real capture screens pass this. */
   rail?: ReactNode;
+  /** The partner's own logo (fetched once in App.tsx — see services/branding.ts), or null to show
+   * Protegey's own default instead — same "try the partner's own branding, otherwise ours"
+   * fallback already used for KYB emails and the partner portal's favicon. Rendered plainly, not
+   * inside ProtegeyLogo's dark pill backdrop: that backdrop exists only because Protegey's own
+   * wordmark is white and needs contrast — a partner's logo could be any shape or color. */
+  logoUrl?: string | null;
 }
 
 /** Shared frame for every screen in the flow: consistent spacing, one card surface, a quiet dark
  * ground instead of the generic light gradient-card look. */
-export function PageShell({ onBack, title, description, children, rail }: PageShellProps) {
+export function PageShell({ onBack, title, description, children, rail, logoUrl }: PageShellProps) {
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <div
@@ -36,7 +42,7 @@ export function PageShell({ onBack, title, description, children, rail }: PageSh
         <div className="rounded-2xl border border-border bg-surface p-6">{children}</div>
 
         <div className="mt-6 flex justify-center">
-          <ProtegeyLogo />
+          {logoUrl ? <img src={logoUrl} alt="" className="h-8 w-auto" /> : <ProtegeyLogo />}
         </div>
       </div>
     </div>

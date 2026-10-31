@@ -1,0 +1,8 @@
+node_modules
+dist
+# Reference-only (type stubs, sample resources referenced in code comments for provenance) —
+# confirmed by grep that nothing in src/ actually imports from here. The real runtime SDK files
+# the app serves live in public/core-sdk/, which IS part of the build.
+FaceTecSDK-browser-10.1.25
+.git
+.env
