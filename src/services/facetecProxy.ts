@@ -17,14 +17,6 @@ interface ProxyResponse<T> {
   error?: string;
 }
 
-/** Required on every call to FaceTec's Testing API (not the regular Production Server SDK) — only
- * the browser-side SDK itself can compute this, so our backend can't generate it; it has to be
- * captured here and forwarded with each request. Computed fresh per call since FaceTec's own
- * sample app does the same rather than caching it. */
-function getTestingApiHeader(): string {
-  return window.FaceTecSDK?.getTestingAPIHeader?.() ?? '';
-}
-
 async function proxyRequest<T>(
   endpoint: string,
   body: Record<string, unknown>,
@@ -33,7 +25,7 @@ async function proxyRequest<T>(
     const res = await fetch(`${API_BASE}/partner/pan-id/${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, testingApiHeader: getTestingApiHeader() }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
@@ -57,45 +49,13 @@ export async function requestFaceTecProcessing(
   externalDatabaseRefID?: string,
   // `result` carries the final liveness/match/OCR data inline on whichever request concludes the
   // session — confirmed against FaceTec's own sample app (SampleAppNetworkingRequest.ts), and the
-  // only real path to the final result: FaceTec's Testing API has no /session-result/{id} route
-  // (confirmed 404 "No route found" from their own server — that endpoint never existed).
+  // only real path to the final result: there's no separate /session-result/{id} route, every
+  // session type (liveness, enrollment, match, ID scan) shares this one /process-request call.
 ): Promise<ProxyResponse<{ responseBlob: string; result?: Record<string, unknown> }>> {
   return proxyRequest('face-process', {
     sessionRequestBlob,
     verificationType,
     externalDatabaseRefID,
-  });
-}
-
-export async function enrollUser(
-  sessionRequestBlob: string,
-  externalDatabaseRefID: string,
-): Promise<ProxyResponse<{ responseBlob: string; sessionId: string; externalDatabaseRefID: string }>> {
-  return proxyRequest('face-enroll', {
-    sessionRequestBlob,
-    externalDatabaseRefID,
-  });
-}
-
-export async function search3DDatabase(
-  faceMapBase64: string,
-  minMatchLevel = 10,
-): Promise<ProxyResponse<{ results: Array<{ externalDatabaseRefID: string; score: number }> }>> {
-  return proxyRequest('face-search', {
-    faceMapBase64,
-    minMatchLevel,
-  });
-}
-
-export async function match3D2DUploadedIDPhoto(
-  externalDatabaseRefID: string,
-  idScanFrontImage: string,
-  minMatchLevel = 10,
-): Promise<ProxyResponse<Record<string, unknown>>> {
-  return proxyRequest('face-match-3d-2d', {
-    externalDatabaseRefID,
-    idScanFrontImage,
-    minMatchLevel,
   });
 }
 

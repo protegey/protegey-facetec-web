@@ -34,7 +34,6 @@ declare global {
     FaceTecSDK?: {
       setResourceDirectory: (resourceDirectory: string) => void;
       setImagesDirectory: (imagesDirectory: string) => void;
-      getTestingAPIHeader: () => string;
       initializeWithSessionRequest: (
         deviceKeyIdentifier: string,
         sessionRequestProcessor: FaceTecSessionRequestProcessor,
