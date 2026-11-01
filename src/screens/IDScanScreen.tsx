@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFaceTec } from '../hooks/useFaceTec';
-import type { DocumentType, IDScanResult, FaceTecVerificationResult } from '../types/facetec';
+import type { DocumentType } from '../types/facetec';
 import { PageShell } from '../components/PageShell';
 import { StepIndicator } from '../components/StepIndicator';
 import { ScanFrame } from '../components/ScanFrame';
@@ -10,8 +10,10 @@ import { logSdkEvent } from '../services/sdkEventLog';
 interface Props {
   documentType: DocumentType;
   // One continuous FaceTec session now covers the document scan AND the face match — see
-  // startIDScanWithFaceMatch in useFaceTec.ts — so completion always carries both results at once.
-  onComplete: (idScan: IDScanResult, verification: FaceTecVerificationResult, raw: Record<string, unknown>) => void;
+  // startIDScanWithFaceMatch in useFaceTec.ts. `raw` is FaceTec's own complete, unmodified
+  // session result — this screen never interprets it, it only hands it off for the backend to
+  // decide the outcome.
+  onComplete: (raw: Record<string, unknown>) => void;
   onBack: () => void;
   onError: (error: string) => void;
   logoUrl?: string | null;
@@ -65,7 +67,7 @@ export function IDScanScreen({ documentType, onComplete, onBack, onError, logoUr
       const result = await startIDScanWithFaceMatch();
       if (result) {
         logSdkEvent('CAPTURE_DONE', 'Scan du document et du visage terminé');
-        onComplete(result.idScan, result.verification, result.raw);
+        onComplete(result.raw);
       } else {
         setStarting(false);
       }

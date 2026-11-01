@@ -1,5 +1,3 @@
-import type { FaceTecVerificationResult, IDScanResult } from '../types/facetec';
-
 // ── Direct backend submission (no iframe/postMessage required) ─────────────
 //
 // This app is meant to be hosted on its own (e.g. Vercel + Cloudflare), on a
@@ -25,69 +23,58 @@ import type { FaceTecVerificationResult, IDScanResult } from '../types/facetec';
 // protegey-backend `KycService.applyFaceTecResultByToken`). No cookies, no
 // CORS credentials — a plain JSON POST, which is why the backend has CORS
 // open for this route already.
+//
+// This app never computes passed/scores itself — it only forwards FaceTec's
+// own raw signal (`rawResponse`) and the captured images. The backend's
+// FaceTecResultInterpreter is the only place that turns that into a KYC
+// decision; the response to this POST (the saved enrollment) carries the
+// computed result back for display.
 
 export interface FaceTecResultPayload {
-  passed: boolean;
-  livenessScore?: number;
-  matchScore?: number;
-  matchLevel?: number;
-  confidenceScore?: number;
+  verificationType: string;
   documentPhoto?: string;
   selfiePhoto?: string;
-  idDocumentType?: string;
-  idDocumentNumber?: string;
-  country?: string;
-  riskFactors?: Record<string, unknown>;
-  rawResponse?: Record<string, unknown>;
+  /** FaceTec Server's complete, verbatim final `/process-request` response. */
+  rawResponse: Record<string, unknown>;
 }
 
-/** Converts this app's internal 0-1 fraction scores to the backend's 0-100 scale. */
-function toPercent(value: number | undefined): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-  return Math.round(value * 100 * 100) / 100;
+/** Best-effort only — see the equivalent note in protegey-backend's FaceTecResultInterpreter.
+ * Neither FaceTec's own Postman Core Test Suite nor a real captured session (checked directly
+ * against the database) confirms the exact key names for the captured selfie/document images on
+ * a live Device SDK session's /process-request response; these are the most plausible candidates,
+ * kept out of the backend's decision-making entirely (`rawResponse` is sent in full regardless,
+ * so nothing is lost if these miss). Revisit against a real, un-truncated session payload. */
+function extractPhoto(raw: Record<string, unknown>, keys: string[]): string | undefined {
+  const idScan = (raw.idScanResultsSoFar ?? {}) as Record<string, unknown>;
+  for (const source of [raw, idScan]) {
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === 'string' && value.length > 0) return value;
+    }
+  }
+  return undefined;
 }
 
-/**
- * Merges every piece of data FaceTec produced across the whole flow — the document scan, the face
- * capture, and the 3D:2D match between them (one continuous session, see
- * startIDScanWithFaceMatch in useFaceTec.ts) — into one payload. Nothing FaceTec reports should be
- * silently dropped: images, every score, and the raw session response for audit all travel together.
- */
-export function buildFaceTecResultPayload(
-  result: FaceTecVerificationResult,
-  idScanResult: IDScanResult | null | undefined,
-  rawSessionResult: Record<string, unknown> | null | undefined,
-): FaceTecResultPayload {
-  const documentData = idScanResult?.documentData;
-  const matchLevel = rawSessionResult && typeof rawSessionResult.matchLevel !== 'undefined'
-    ? Number(rawSessionResult.matchLevel)
-    : result.riskFactors.matchLevel || undefined;
-
+/** Packages everything FaceTec produced across the whole flow — one continuous session covering
+ * the document scan, the face capture, and the 3D:2D match between them (see
+ * startIDScanWithFaceMatch in useFaceTec.ts) — for the backend to interpret. Nothing FaceTec
+ * reports is dropped: `rawResponse` travels verbatim for audit and as the only input to the
+ * backend's decision logic. */
+export function buildFaceTecResultPayload(verificationType: string, rawResponse: Record<string, unknown>): FaceTecResultPayload {
   return {
-    passed: result.passed,
-    livenessScore: toPercent(result.livenessScore),
-    matchScore: toPercent(result.matchScore),
-    matchLevel,
-    confidenceScore: toPercent(result.confidenceScore),
-    documentPhoto: documentData?.photo || undefined,
-    selfiePhoto: result.selfiePhoto || undefined,
-    idDocumentType: documentData?.documentType || undefined,
-    idDocumentNumber: documentData?.documentNumber || undefined,
-    country: documentData?.issuingState || documentData?.nationality || undefined,
-    riskFactors: { ...result.riskFactors },
-    // Every raw SDK response, kept verbatim for audit — the combined session result plus the
-    // structured ID scan (minus the huge photo field, already sent as `documentPhoto`).
-    rawResponse: {
-      session: result.rawResponse,
-      idScan: idScanResult ? { ...idScanResult, documentData: { ...idScanResult.documentData, photo: undefined } } : undefined,
-      match: rawSessionResult ?? undefined,
-    },
+    verificationType,
+    documentPhoto: extractPhoto(rawResponse, ['frontImage', 'documentImage', 'idScanFrontImage']),
+    selfiePhoto: extractPhoto(rawResponse, ['auditTrailImage', 'auditTrailBase64']),
+    rawResponse,
   };
 }
 
 export interface SubmitOutcome {
   success: boolean;
   error?: string;
+  /** The saved enrollment as the backend computed it (status/scores/decision) — the only source
+   * of truth for what this app displays on the result screen. */
+  enrollment?: Record<string, unknown>;
 }
 
 /**
@@ -107,7 +94,8 @@ export async function submitFaceTecResult(apiBase: string, enrollmentId: string,
       const body = await res.json().catch(() => null);
       return { success: false, error: (body?.message as string) ?? `Le serveur a refusé le résultat (${res.status})` };
     }
-    return { success: true };
+    const enrollment = await res.json().catch(() => undefined);
+    return { success: true, enrollment };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Erreur réseau lors de l\'envoi du résultat' };
   }

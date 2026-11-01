@@ -9,7 +9,7 @@ import { notifyParentComplete } from './services/embedBridge'
 import { buildFaceTecResultPayload, submitFaceTecResult } from './services/backendSubmission'
 import { fetchPartnerLogoUrl } from './services/branding'
 import { logSdkEvent } from './services/sdkEventLog'
-import type { VerificationStep, FaceTecVerificationResult, IDScanResult, DocumentType } from './types/facetec'
+import type { VerificationStep, FaceTecDecision, DocumentType } from './types/facetec'
 
 // ── Launch params ─────────────────────────────────────────────────────────
 // protegey-partner-web creates the KycEnrollment (it's authenticated, this
@@ -52,52 +52,44 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- launch params are read once (see readLaunchParams) and never change for the life of this tab
   }, [])
   const [documentType, setDocumentType] = useState<DocumentType>('cni')
-  const [result, setResult] = useState<FaceTecVerificationResult | null>(null)
+  // Never computed locally — this app only drives the SDK; the decision (passed/scores) is
+  // Protegey's own business logic, computed once by the backend from FaceTec's raw signal (see
+  // FaceTecResultInterpreter), and handed back here purely for display.
+  const [enrollment, setEnrollment] = useState<FaceTecDecision | null>(null)
   const [sdkLoaded, setSdkLoaded] = useState(false)
-  const [idScanResult, setIDScanResult] = useState<IDScanResult | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   const handleDocumentTypeSelect = (type: DocumentType) => {
     setDocumentType(type);
-    setIDScanResult(null);
     setScreen('id-scan');
   };
 
   // One continuous FaceTec session now does the document scan, the face capture, AND the 3D:2D
-  // match between them (see startIDScanWithFaceMatch in useFaceTec.ts) — so this single handler
-  // replaces what used to be two separate steps (ID scan, then an independent liveness session on
-  // its own screen with no matching between the two at all) plus a third explicit match3D2D call.
-  // `raw` is the session's own result payload, already carrying a real matchLevel — passed through
-  // to buildFaceTecResultPayload exactly where the old separate match-call response used to go.
-  const handleVerificationComplete = async (
-    idScan: IDScanResult,
-    verification: FaceTecVerificationResult,
-    raw: Record<string, unknown>,
-  ) => {
-    setIDScanResult(idScan);
-    setResult(verification);
+  // match between them (see startIDScanWithFaceMatch in useFaceTec.ts). `raw` is FaceTec's own
+  // complete, unmodified session result — this app forwards it as-is; the backend is the only
+  // place that turns it into a decision, and its response is the only thing displayed below.
+  const handleVerificationComplete = async (raw: Record<string, unknown>) => {
+    setScreen('result');
 
     // Report straight to protegey-backend — this app has no Protegey session of its own, so the
     // one-time `token` (from the launch URL) is what authenticates this specific call instead of
-    // a partner JWT. Sends everything FaceTec produced: every score (liveness, match/matchLevel,
-    // confidence), both images (ID document + selfie), extracted document fields, and the raw SDK
-    // responses for audit. No-ops when this app was opened without an enrollment (e.g. directly,
-    // for local testing) — nothing to report to.
+    // a partner JWT. No-ops when this app was opened without an enrollment (e.g. directly, for
+    // local testing) — nothing to report to, and nothing to display either.
     if (enrollmentId && token) {
       setSubmitting(true);
-      const payload = buildFaceTecResultPayload(verification, idScan, raw);
+      const payload = buildFaceTecResultPayload('match', raw);
       const outcome = await submitFaceTecResult(apiBase, enrollmentId, token, payload);
+      const savedEnrollment = (outcome.enrollment as FaceTecDecision | undefined) ?? null;
       setSubmitError(outcome.success ? null : outcome.error ?? 'Échec de l’enregistrement du résultat');
+      setEnrollment(savedEnrollment);
       setSubmitting(false);
 
       // Only relevant if this app happens to be iframed rather than reached by direct navigation
       // (the primary mode) — a lightweight "done" signal, since the actual data already went to
       // the backend above, not through postMessage.
-      notifyParentComplete(enrollmentId, verification.passed, parentOrigin);
+      notifyParentComplete(enrollmentId, savedEnrollment?.decision?.passed ?? false, parentOrigin);
     }
-
-    setScreen('result');
   };
 
   const handleReturnToPartner = () => {
@@ -132,8 +124,8 @@ export function App() {
   };
 
   const handleRestart = () => {
-    setResult(null);
-    setIDScanResult(null);
+    setEnrollment(null);
+    setSubmitError(null);
     setScreen('document-type-select');
   };
 
@@ -162,10 +154,9 @@ export function App() {
         />
       )}
 
-      {screen === 'result' && result && (
+      {screen === 'result' && (
         <ResultScreen
-          result={result}
-          idScanResult={idScanResult}
+          enrollment={enrollment}
           onRestart={handleRestart}
           submitting={submitting}
           submitError={submitError}

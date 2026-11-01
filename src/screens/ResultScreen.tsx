@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { ScanFrame } from '../components/ScanFrame';
-import type { FaceTecVerificationResult, IDScanResult } from '../types/facetec';
+import type { FaceTecDecision } from '../types/facetec';
 
 const AUTO_CLOSE_SECONDS = 5;
 
 interface Props {
-  result: FaceTecVerificationResult;
-  /** From the same combined ID-scan-then-face-match session as `result` — document fields for
-   * display below the scores. */
-  idScanResult?: IDScanResult | null;
+  // The backend's own answer — passed/scores are Protegey's business logic, computed once,
+  // server-side, from FaceTec's raw signal. This screen only displays it; null while still
+  // submitting, or if submission failed before a decision ever came back.
+  enrollment: FaceTecDecision | null;
   onRestart: () => void;
   /** Whether the result is still being posted to protegey-backend. */
   submitting?: boolean;
@@ -25,19 +25,18 @@ interface Props {
 }
 
 function pct(value: number): string {
-  return `${Math.round(value * 100)}%`;
+  return `${Math.round(value)}%`;
 }
 
-export function ResultScreen({ result, idScanResult, onRestart, submitting, submitError, returnUrl, onReturnToPartner, onClose }: Props) {
-  const { passed, confidenceScore, livenessScore, riskFactors, deviceInfo, sessionId } = result;
-  const matchLevel = riskFactors.matchLevel || undefined;
-  const docData = idScanResult?.documentData;
+export function ResultScreen({ enrollment, onRestart, submitting, submitError, returnUrl, onReturnToPartner, onClose }: Props) {
+  const decision = enrollment?.decision;
+  const passed = decision?.passed ?? false;
   const tone = passed ? 'success' : 'danger';
 
   // Only when launched from a mobile SDK's webview (no returnUrl), and only once submission has
   // actually finished successfully — auto-closing mid-submit, or over a failed save, would hide a
   // problem the user still needs to see and react to (Réessayer).
-  const shouldAutoClose = !returnUrl && Boolean(onClose) && !submitting && !submitError;
+  const shouldAutoClose = !returnUrl && Boolean(onClose) && !submitting && !submitError && Boolean(enrollment);
   const [secondsLeft, setSecondsLeft] = useState(AUTO_CLOSE_SECONDS);
 
   useEffect(() => {
@@ -50,6 +49,17 @@ export function ResultScreen({ result, idScanResult, onRestart, submitting, subm
     return () => clearTimeout(timer);
   }, [shouldAutoClose, secondsLeft, onClose]);
 
+  if (submitting || (!enrollment && !submitError)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-border border-t-accent" />
+          <p className="text-sm text-muted">Enregistrement du résultat…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <div
@@ -60,59 +70,58 @@ export function ResultScreen({ result, idScanResult, onRestart, submitting, subm
       />
       <div className="relative w-full max-w-sm">
         <div className="mb-6 text-center">
-          <ScanFrame active={false} tone={tone}>
+          <ScanFrame active={false} tone={enrollment ? tone : 'danger'}>
             <span className={`text-4xl ${passed ? 'text-success' : 'text-danger'}`} aria-hidden="true">
-              {passed ? '✓' : '✕'}
+              {enrollment ? (passed ? '✓' : '✕') : '!'}
             </span>
           </ScanFrame>
           <h1 className="mt-5 font-display text-2xl font-bold text-ink">
-            {passed ? 'Identité vérifiée' : 'Vérification échouée'}
+            {enrollment ? (passed ? 'Identité vérifiée' : 'Vérification échouée') : 'Résultat indisponible'}
           </h1>
-          <p className="mt-1.5 font-mono text-xs text-muted">{sessionId}</p>
+          {enrollment && <p className="mt-1.5 font-mono text-xs text-muted">{enrollment.id}</p>}
         </div>
 
-        <div className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-warn/30 bg-warn-dim px-3 py-2 text-xs text-warn">
-          Mode test — résultats issus de l'API de test, en attendant l'accès en production
-        </div>
+        {enrollment && decision && (
+          <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
+            <p className="mb-3 font-display text-sm font-semibold text-ink">Scores</p>
+            <ScoreRow label="Vivacité" value={enrollment.livenessScore ?? 0} />
+            {decision.confidenceScore !== null && <ScoreRow label="Confiance" value={decision.confidenceScore * 100} />}
+            {enrollment.faceMatchScore !== null && <ScoreRow label="Correspondance" value={enrollment.faceMatchScore} />}
 
-        <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
-          <p className="mb-3 font-display text-sm font-semibold text-ink">Scores</p>
-          <ScoreRow label="Vivacité" value={livenessScore} />
-          <ScoreRow label="Confiance" value={confidenceScore} />
-          {matchLevel !== undefined && <ScoreRow label="Correspondance" value={Math.min(1, matchLevel / 100)} raw={`${matchLevel}`} />}
+            {decision.riskFactors && (
+              <>
+                <div className="my-4 h-px bg-border" />
+                <p className="mb-3 font-display text-sm font-semibold text-ink">Facteurs de risque</p>
+                <RiskRows riskFactors={decision.riskFactors} />
+              </>
+            )}
+          </div>
+        )}
 
-          <div className="my-4 h-px bg-border" />
-
-          <p className="mb-3 font-display text-sm font-semibold text-ink">Facteurs de risque</p>
-          <RiskRow label="Appareil rooté" bad={riskFactors.rootedDevice} />
-          <RiskRow label="Émulateur détecté" bad={riskFactors.emulator} />
-          <RiskRow label="Tentatives de spoofing" bad={riskFactors.spoofAttempts > 0} value={String(riskFactors.spoofAttempts)} />
-          {deviceInfo?.model && <RiskRow label="Appareil" bad={false} value={deviceInfo.model} />}
-        </div>
-
-        {docData && (
+        {enrollment && (enrollment.documentType || enrollment.country) && (
           <div className="mt-4 rounded-2xl border border-border bg-surface p-5">
             <p className="mb-3 font-display text-sm font-semibold text-ink">Document</p>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <span className="text-muted">Nom</span>
-                <span className="truncate text-ink">{String(docData.fullName ?? '—')}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted">Numéro</span>
-                <span className="truncate font-mono text-ink">{String(docData.documentNumber ?? '—')}</span>
-              </div>
+              {enrollment.fullName && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted">Nom</span>
+                  <span className="truncate text-ink">{enrollment.fullName}</span>
+                </div>
+              )}
               <div className="flex justify-between gap-4">
                 <span className="text-muted">Type</span>
-                <span className="text-ink">{String(docData.documentType ?? '—')}</span>
+                <span className="text-ink">{enrollment.documentType ?? '—'}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-muted">Pays</span>
+                <span className="text-ink">{enrollment.country ?? '—'}</span>
               </div>
             </div>
           </div>
         )}
 
-        {submitting && <StatusBanner tone="accent">Enregistrement du résultat…</StatusBanner>}
         {submitError && <StatusBanner tone="danger">Le résultat n'a pas pu être enregistré ({submitError}). Réessayez ou contactez le support.</StatusBanner>}
-        {!submitting && !submitError && returnUrl && <StatusBanner tone="success">Résultat enregistré avec succès.</StatusBanner>}
+        {!submitError && enrollment && returnUrl && <StatusBanner tone="success">Résultat enregistré avec succès.</StatusBanner>}
 
         <div className="mt-6 flex flex-col gap-2.5">
           {returnUrl && onReturnToPartner && (
@@ -147,15 +156,37 @@ export function ResultScreen({ result, idScanResult, onRestart, submitting, subm
   );
 }
 
-function ScoreRow({ label, value, raw }: { label: string; value: number; raw?: string }) {
+function ScoreRow({ label, value }: { label: string; value: number }) {
   return (
     <div className="mb-2.5 flex items-center gap-3 text-sm last:mb-0">
       <span className="w-28 flex-shrink-0 text-muted">{label}</span>
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
         <div className="h-full rounded-full bg-accent" style={{ width: pct(value) }} />
       </div>
-      <span className="w-12 flex-shrink-0 text-right font-mono text-ink">{raw ?? pct(value)}</span>
+      <span className="w-12 flex-shrink-0 text-right font-mono text-ink">{pct(value)}</span>
     </div>
+  );
+}
+
+const RISK_LABELS: Record<string, string> = {
+  rootedDevice: 'Appareil rooté',
+  emulator: 'Émulateur détecté',
+  platform: 'Plateforme',
+  deviceModel: 'Appareil',
+  matchLevel: 'Niveau de correspondance',
+};
+
+/** Renders whatever risk factors the backend computed — a fixed allowlist, not every raw key, so
+ * an internal-only field (e.g. idScanStatusEnum) never leaks onto the screen unexplained. */
+function RiskRows({ riskFactors }: { riskFactors: Record<string, unknown> }) {
+  const rows = Object.entries(RISK_LABELS).filter(([key]) => riskFactors[key] !== undefined && riskFactors[key] !== null);
+  if (rows.length === 0) return null;
+  return (
+    <>
+      {rows.map(([key, label]) => (
+        <RiskRow key={key} label={label} bad={riskFactors[key] === true} value={typeof riskFactors[key] === 'boolean' ? undefined : String(riskFactors[key])} />
+      ))}
+    </>
   );
 }
 

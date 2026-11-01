@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { FaceTecVerificationResult, VerificationType, IDScanResult } from '../types/facetec';
+import type { VerificationType } from '../types/facetec';
 import { requestFaceTecProcessing } from '../services/facetecProxy';
 import { applyProtegeyFaceTecTheme } from '../services/faceTecTheme';
 import { faceTecFrenchStrings } from '../services/faceTecLocalization';
@@ -113,10 +113,17 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   const sdkInstanceRef = useRef<FaceTecSDKInstance | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   // FaceTec's Testing API has no /session-result/{id} endpoint (confirmed: their own server
-  // returns 404 "No route found" for it) — the real final result arrives INLINE, in the `result`
-  // field of whichever process-request response concludes the session (confirmed against
-  // FaceTec's own sample app, SampleAppNetworkingRequest.ts). processSessionRequest below captures
-  // it here as it comes in; start*() reads it once the native session has exited successfully.
+  // returns 404 "No route found" for it) — the real final result arrives INLINE, as the complete
+  // body of whichever process-request response concludes the session. Previously this only kept
+  // `result.data.result` (the `.result` sub-object) — but FaceTec's own Postman Core Test Suite
+  // confirms the fields that matter for an ID-scan-involving session (`idScanResultsSoFar.*`,
+  // `additionalSessionData.*`, `externalDatabaseRefID`) are SIBLING keys at the top level of the
+  // response, not nested inside `.result` — narrowing to `.result` silently discarded them, which
+  // is why a real failed/succeeded ID scan was never actually visible downstream. Keeping the
+  // whole body here, overwritten on every call, means the LAST call (the one that concludes the
+  // session) carries the full accumulated session state FaceTec's own server tracks.
+  // This app never interprets it — interpretation (pass/fail, scores) is Protegey's own business
+  // logic, computed once, on the backend (see FaceTecResultInterpreter), from this same raw data.
   const latestSessionResultRef = useRef<Record<string, unknown> | null>(null);
 
   const processSessionRequest = useCallback(
@@ -130,13 +137,11 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
           const result = await requestFaceTecProcessing(requestBlob, verificationType, sessionIdRef.current ?? undefined);
           if (result.data) {
             logSdkEvent('INIT', `process-request keys: ${JSON.stringify(Object.keys(result.data))}`);
-            if (result.data.result) {
-              latestSessionResultRef.current = result.data.result;
-              logFraudSignals(result.data.result);
-            }
+            latestSessionResultRef.current = result.data;
+            logFraudSignals(result.data);
           }
           if (result.success && result.data) {
-            requestCallback.processResponse(result.data.responseBlob);
+            requestCallback.processResponse(result.data.responseBlob as string);
           } else {
             requestCallback.abortOnCatastrophicError();
           }
@@ -211,7 +216,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     });
   }, [processSessionRequest, onError]);
 
-  const startLiveness = useCallback(async (): Promise<FaceTecVerificationResult | null> => {
+  const startLiveness = useCallback(async (): Promise<{ sessionId: string; raw: Record<string, unknown> } | null> => {
     const sdkInstance = sdkInstanceRef.current;
     // Deliberately NOT checking the `initialized` state here — callers always call
     // `await initializeFaceTec()` immediately before this, in the same function, with no render in
@@ -251,7 +256,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
         onError('Contrôle facial terminé sans résultat final');
         return null;
       }
-      return buildVerificationResult(sessionId, raw, 'liveness');
+      return { sessionId, raw };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Liveness check failed';
       onError(msg);
@@ -261,7 +266,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     }
   }, [onError, processSessionRequest]);
 
-  const startIDScanOnly = useCallback(async (): Promise<IDScanResult | null> => {
+  const startIDScanOnly = useCallback(async (): Promise<{ sessionId: string; raw: Record<string, unknown> } | null> => {
     const sdkInstance = sdkInstanceRef.current;
     // See the matching comment in startLiveness — same stale-closure reason for not checking
     // `initialized` here.
@@ -295,7 +300,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
         onError('Scan du document terminé sans résultat final');
         return null;
       }
-      return buildIDScanResult(sessionId, raw);
+      return { sessionId, raw };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'ID Scan failed';
       onError(msg);
@@ -315,8 +320,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
    * FaceMap already enrolled in a SEPARATE prior session — FaceTec's real server rejects it
    * otherwise with "requires an already enrolled 3D FaceMap, but one was not provided".) */
   const startIDScanWithFaceMatch = useCallback(async (): Promise<{
-    idScan: IDScanResult;
-    verification: FaceTecVerificationResult;
+    sessionId: string;
     raw: Record<string, unknown>;
   } | null> => {
     const sdkInstance = sdkInstanceRef.current;
@@ -349,11 +353,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
         onError('Vérification terminée sans résultat final');
         return null;
       }
-      return {
-        idScan: buildIDScanResult(sessionId, raw),
-        verification: buildVerificationResult(sessionId, raw, 'match'),
-        raw,
-      };
+      return { sessionId, raw };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'ID Scan + Face Match failed';
       onError(msg);
@@ -363,7 +363,7 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
     }
   }, [onError, processSessionRequest]);
 
-  const startEnrollment = useCallback(async (externalDatabaseRefID: string): Promise<FaceTecVerificationResult | null> => {
+  const startEnrollment = useCallback(async (externalDatabaseRefID: string): Promise<{ sessionId: string; raw: Record<string, unknown>; externalDatabaseRefID: string } | null> => {
     const result = await startLiveness();
     if (result) {
       return { ...result, externalDatabaseRefID };
@@ -392,76 +392,3 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
   };
 }
 
-function buildIDScanResult(sessionId: string, raw: Record<string, unknown>): IDScanResult {
-  const documentData = (raw.documentData as Record<string, unknown>) ?? {};
-  return {
-    success: raw.success as boolean ?? false,
-    documentData: {
-      fullName: String(documentData.fullName ?? documentData.name ?? ''),
-      documentNumber: String(documentData.documentNumber ?? documentData.idNumber ?? ''),
-      documentType: String(documentData.documentType ?? ''),
-      dateOfBirth: String(documentData.dateOfBirth ?? ''),
-      expirationDate: String(documentData.expirationDate ?? ''),
-      nationality: String(documentData.nationality ?? ''),
-      issuingState: String(documentData.issuingState ?? ''),
-      photo: String(documentData.photo ?? documentData.idPhoto ?? ''),
-    },
-    photoIDNextStepEnumInt: Number(raw.photoIDNextStepEnumInt ?? 0),
-    sessionId,
-    externalDatabaseRefID: String(raw.externalDatabaseRefID ?? ''),
-  };
-}
-
-function buildVerificationResult(
-  sessionId: string,
-  raw: Record<string, unknown>,
-  type: string,
-): FaceTecVerificationResult {
-  const faceScan = (raw.faceScan ?? raw.livenessCheck ?? {}) as Record<string, unknown>;
-  const device = (raw.deviceInfo ?? {}) as Record<string, unknown>;
-  const livenessProbability = Number(faceScan.livenessProbability ?? faceScan.probability ?? 0);
-  const matchLevel = Number(raw.matchLevel ?? 0);
-  // FaceTec's own matchLevel scale: 0 means no match (fail); any level above 0 is a genuine
-  // successful match, the number just says how strict a threshold it cleared (e.g. Match Level 7
-  // ≈ 1-in-500,000 false-accept rate) — confirmed against FaceTec's own published match-level
-  // table. This used to be divided by 10 and treated as a 0-1 confidence fraction requiring 0.85+
-  // to "pass" — effectively demanding Match Level 8.5+, which silently declined perfectly good
-  // matches (a real Match Level 7 — checkmarked as a pass on FaceTec's own dashboard — scored
-  // 0.7 under that formula and got rejected). The match itself already encodes pass/fail; a
-  // completed start3DLivenessThen3D2DPhotoIDMatch session reaching this point has already had its
-  // liveness verified by FaceTec as a prerequisite of the flow, so matchLevel alone decides it.
-  const confidence = type === 'enrollment' || type === 'liveness'
-    ? livenessProbability
-    : Math.min(1, matchLevel / 10);
-  const passed = type === 'enrollment' || type === 'liveness'
-    ? livenessProbability >= 0.85
-    : matchLevel > 0;
-
-  return {
-    sessionId,
-    passed,
-    confidenceScore: Math.round(Math.min(1, Math.max(0, confidence)) * 10000) / 10000,
-    livenessScore: livenessProbability,
-    matchScore: type !== 'liveness' ? Math.round(confidence * 100) / 100 : undefined,
-    riskFactors: {
-      livenessProbability,
-      matchLevel,
-      rootedDevice: Boolean(device.isRooted ?? device.isJailbroken ?? false),
-      emulator: Boolean(device.isEmulator ?? false),
-      spoofAttempts: Number((raw.additionalSessionData as Record<string, unknown>)?.spoofAttempts ?? 0),
-    },
-    deviceInfo: device.model ? {
-      model: String(device.model),
-      sdkVersion: String(device.sdkVersion ?? ''),
-      platform: String(device.platform ?? 'web'),
-    } : undefined,
-    ageEstimate: raw.ageEstimateGroup ? Number(raw.ageEstimateGroup) : undefined,
-    // The actual base64 selfie image — previously this built an object URL from an EMPTY blob
-    // (a bug: the real image data was discarded and the URL was invalid off-page anyway, since a
-    // blob: URL can't be sent to the backend). `selfiePhoto` carries the real base64 string; keep
-    // `auditTrailUrl` only as a data: URL, usable for an on-screen <img> if ever needed.
-    selfiePhoto: typeof raw.auditTrailImage === 'string' ? raw.auditTrailImage : undefined,
-    auditTrailUrl: typeof raw.auditTrailImage === 'string' ? `data:image/jpeg;base64,${raw.auditTrailImage}` : undefined,
-    rawResponse: raw,
-  };
-}

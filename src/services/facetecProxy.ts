@@ -47,11 +47,14 @@ export async function requestFaceTecProcessing(
   sessionRequestBlob: string,
   verificationType: string,
   externalDatabaseRefID?: string,
-  // `result` carries the final liveness/match/OCR data inline on whichever request concludes the
-  // session — confirmed against FaceTec's own sample app (SampleAppNetworkingRequest.ts), and the
-  // only real path to the final result: there's no separate /session-result/{id} route, every
-  // session type (liveness, enrollment, match, ID scan) shares this one /process-request call.
-): Promise<ProxyResponse<{ responseBlob: string; result?: Record<string, unknown> }>> {
+  // The complete FaceTec Server `/process-request` response — confirmed against FaceTec's own
+  // sample app (SampleAppNetworkingRequest.ts) and Postman Core Test Suite, and the only real path
+  // to the final result: there's no separate /session-result/{id} route, every session type
+  // (liveness, enrollment, match, ID scan) shares this one /process-request call. `responseBlob`
+  // drives the SDK's own UI forward; everything else (`result`, `idScanResultsSoFar`,
+  // `additionalSessionData`, ...) is forwarded to the backend verbatim for it to interpret — this
+  // app never reads past `responseBlob` itself.
+): Promise<ProxyResponse<Record<string, unknown> & { responseBlob: string }>> {
   return proxyRequest('face-process', {
     sessionRequestBlob,
     verificationType,

@@ -38,31 +38,27 @@ export interface FaceTecSessionResponse {
   error?: string;
 }
 
-export interface FaceTecVerificationResult {
-  sessionId: string;
-  passed: boolean;
-  confidenceScore: number;
-  livenessScore: number;
-  matchScore?: number;
-  externalDatabaseRefID?: string;
-  riskFactors: {
-    livenessProbability: number;
-    matchLevel: number;
-    rootedDevice: boolean;
-    emulator: boolean;
-    spoofAttempts: number;
-  };
-  deviceInfo?: {
-    model: string;
-    sdkVersion: string;
-    platform: string;
-  };
-  ageEstimate?: number;
-  auditTrailUrl?: string;
-  /** Base64 selfie/face capture image from the liveness check's audit trail — same convention as
-   * `IDScanResult.documentData.photo` (raw base64, no `data:` prefix). */
-  selfiePhoto?: string;
-  rawResponse: Record<string, unknown>;
+/** What protegey-backend's `POST /kyc/sessions/:id/facetec-result` hands back once it has
+ * computed the decision — the saved KycEnrollment, serialized. This app never computes
+ * passed/scores itself; this is the ONLY source of what gets displayed on the result screen. */
+export interface FaceTecDecision {
+  id: string;
+  status: string;
+  livenessScore: number | null;
+  faceMatchScore: number | null;
+  idDocumentType: string | null;
+  documentType: string | null;
+  country: string | null;
+  fullName: string | null;
+  decision: {
+    source: string;
+    passed: boolean;
+    confidenceScore: number | null;
+    livenessScore: number | null;
+    matchScore: number | null;
+    matchLevel: number | null;
+    riskFactors: Record<string, unknown> | null;
+  } | null;
 }
 
 // ── Verification types ─────────────────────────────────────────────────
@@ -72,40 +68,6 @@ export type VerificationStep = 'document-type-select' | 'id-scan' | 'result';
 export type DocumentType = 'cni' | 'passport';
 
 export type VerificationType = 'liveness' | 'enrollment' | 're-verification' | 'match';
-
-export interface IDScanResult {
-  success: boolean;
-  documentData: {
-    fullName: string;
-    documentNumber: string;
-    documentType: string;
-    dateOfBirth?: string;
-    expirationDate?: string;
-    nationality?: string;
-    issuingState?: string;
-    photo?: string;
-    [key: string]: unknown;
-  };
-  photoIDNextStepEnumInt: number;
-  sessionId: string;
-  externalDatabaseRefID?: string;
-}
-
-export interface KycEnrollment {
-  id: string;
-  partnerId: string;
-  fullName: string | null;
-  status: 'not_started' | 'in_progress' | 'awaiting_user' | 'in_review' | 'approved' | 'declined' | 'resubmitted' | 'abandoned' | 'expired';
-  sessionId: string | null;
-  faceTecSessionId: string | null;
-  livenessScore: number | null;
-  faceMatchScore: number | null;
-  verificationType: VerificationType | null;
-  externalDatabaseRefID: string | null;
-  deviceModel: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
 
 export interface FaceTecProxyRequest {
   sessionRequestBlob: string;
