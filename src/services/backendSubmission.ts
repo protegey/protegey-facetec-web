@@ -32,41 +32,17 @@
 
 export interface FaceTecResultPayload {
   verificationType: string;
-  documentPhoto?: string;
-  selfiePhoto?: string;
-  /** FaceTec Server's complete, verbatim final `/process-request` response. */
+  /** FaceTec Server's complete, verbatim final `/process-request` response. The backend's
+   * FaceTecResultInterpreter reads the document photo(s) straight out of
+   * `rawResponse.idScanResultsSoFar.photoIDFrontImage`/`photoIDBackImage` — real, confirmed field
+   * names (see IDScanResultsSoFar.java on the self-hosted FaceTec Server), so this app no longer
+   * needs to guess at extracting them itself. There's currently no equivalent field for the live
+   * selfie/liveness capture image on this flow — a separate, not-yet-solved problem. */
   rawResponse: Record<string, unknown>;
 }
 
-/** Best-effort only — see the equivalent note in protegey-backend's FaceTecResultInterpreter.
- * Neither FaceTec's own Postman Core Test Suite nor a real captured session (checked directly
- * against the database) confirms the exact key names for the captured selfie/document images on
- * a live Device SDK session's /process-request response; these are the most plausible candidates,
- * kept out of the backend's decision-making entirely (`rawResponse` is sent in full regardless,
- * so nothing is lost if these miss). Revisit against a real, un-truncated session payload. */
-function extractPhoto(raw: Record<string, unknown>, keys: string[]): string | undefined {
-  const idScan = (raw.idScanResultsSoFar ?? {}) as Record<string, unknown>;
-  for (const source of [raw, idScan]) {
-    for (const key of keys) {
-      const value = source[key];
-      if (typeof value === 'string' && value.length > 0) return value;
-    }
-  }
-  return undefined;
-}
-
-/** Packages everything FaceTec produced across the whole flow — one continuous session covering
- * the document scan, the face capture, and the 3D:2D match between them (see
- * startIDScanWithFaceMatch in useFaceTec.ts) — for the backend to interpret. Nothing FaceTec
- * reports is dropped: `rawResponse` travels verbatim for audit and as the only input to the
- * backend's decision logic. */
 export function buildFaceTecResultPayload(verificationType: string, rawResponse: Record<string, unknown>): FaceTecResultPayload {
-  return {
-    verificationType,
-    documentPhoto: extractPhoto(rawResponse, ['frontImage', 'documentImage', 'idScanFrontImage']),
-    selfiePhoto: extractPhoto(rawResponse, ['auditTrailImage', 'auditTrailBase64']),
-    rawResponse,
-  };
+  return { verificationType, rawResponse };
 }
 
 export interface SubmitOutcome {
