@@ -52,6 +52,9 @@ export interface FaceTecDecision {
   fullName: string | null;
   decision: {
     source: string;
+    /** 'SUCCESS' = auto-approved, 'MANUAL' = passed liveness/ID-scan but below the confidence
+     * threshold, a human needs to review it, 'FAILED' = liveness/ID-scan itself failed. */
+    outcome: 'SUCCESS' | 'MANUAL' | 'FAILED';
     passed: boolean;
     confidenceScore: number | null;
     livenessScore: number | null;
