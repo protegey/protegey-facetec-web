@@ -30,8 +30,12 @@ function pct(value: number): string {
 
 export function ResultScreen({ enrollment, onRestart, submitting, submitError, returnUrl, onReturnToPartner, onClose }: Props) {
   const decision = enrollment?.decision;
-  const passed = decision?.passed ?? false;
-  const tone = passed ? 'success' : 'danger';
+  // decision.passed alone can't tell SUCCESS and MANUAL apart — both pass FaceTec's hard checks
+  // (liveness, clean ID scan); MANUAL just means the match confidence is below the auto-approve
+  // threshold and a human needs to review it. Showing a flat "Identité vérifiée" for a MANUAL
+  // outcome would be misleading — the user isn't actually approved yet.
+  const outcome = decision?.outcome;
+  const tone = outcome === 'SUCCESS' ? 'success' : outcome === 'MANUAL' ? 'accent' : 'danger';
 
   // Only when launched from a mobile SDK's webview (no returnUrl), and only once submission has
   // actually finished successfully — auto-closing mid-submit, or over a failed save, would hide a
@@ -64,20 +68,29 @@ export function ResultScreen({ enrollment, onRestart, submitting, submitError, r
     <div className="relative flex min-h-screen items-center justify-center bg-bg px-4 py-10">
       <div
         className={`pointer-events-none absolute left-1/2 top-0 h-[420px] w-[420px] -translate-x-1/2 rounded-full blur-[120px] ${
-          passed ? 'bg-success/10' : 'bg-danger/10'
+          outcome === 'SUCCESS' ? 'bg-success/10' : outcome === 'MANUAL' ? 'bg-accent/10' : 'bg-danger/10'
         }`}
         aria-hidden="true"
       />
       <div className="relative w-full max-w-sm">
         <div className="mb-6 text-center">
           <ScanFrame active={false} tone={enrollment ? tone : 'danger'}>
-            <span className={`text-4xl ${passed ? 'text-success' : 'text-danger'}`} aria-hidden="true">
-              {enrollment ? (passed ? '✓' : '✕') : '!'}
+            <span className={`text-4xl ${outcome === 'SUCCESS' ? 'text-success' : outcome === 'MANUAL' ? 'text-accent' : 'text-danger'}`} aria-hidden="true">
+              {!enrollment ? '!' : outcome === 'SUCCESS' ? '✓' : outcome === 'MANUAL' ? '⏳' : '✕'}
             </span>
           </ScanFrame>
           <h1 className="mt-5 font-display text-2xl font-bold text-ink">
-            {enrollment ? (passed ? 'Identité vérifiée' : 'Vérification échouée') : 'Résultat indisponible'}
+            {!enrollment
+              ? 'Résultat indisponible'
+              : outcome === 'SUCCESS'
+                ? 'Identité vérifiée'
+                : outcome === 'MANUAL'
+                  ? 'Vérification en cours de revue'
+                  : 'Vérification échouée'}
           </h1>
+          {outcome === 'MANUAL' && (
+            <p className="mt-1.5 text-sm text-muted">Votre identité a été capturée avec succès et sera examinée manuellement.</p>
+          )}
           {enrollment && <p className="mt-1.5 font-mono text-xs text-muted">{enrollment.id}</p>}
         </div>
 
