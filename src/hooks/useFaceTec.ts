@@ -137,7 +137,14 @@ export function useFaceTec({ verificationType, onError }: UseFaceTecOptions) {
           const result = await requestFaceTecProcessing(requestBlob, verificationType, sessionIdRef.current ?? undefined);
           if (result.data) {
             logSdkEvent('INIT', `process-request keys: ${JSON.stringify(Object.keys(result.data))}`);
-            latestSessionResultRef.current = result.data;
+            // MERGE, never replace outright — confirmed against a real failed session that at
+            // least one call late in a session (server metadata only: didError/launchId/
+            // serverInfo/httpCallInfo/responseBlob, no idScanResultsSoFar at all) can arrive
+            // AFTER the real result-carrying call, which the previous unconditional overwrite
+            // let silently erase the actual scan data with. A later call's response simply
+            // doesn't have the `idScanResultsSoFar`/`result` keys when it lacks that data, so
+            // spreading it on top never removes a key an earlier, richer call already set.
+            latestSessionResultRef.current = { ...latestSessionResultRef.current, ...result.data };
             logFraudSignals(result.data);
           }
           if (result.success && result.data) {
